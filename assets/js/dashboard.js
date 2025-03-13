@@ -1,5 +1,5 @@
 /**
- * Dashboard JavaScript
+ * Dashboard JavaScript - Updated for real data and future projections
  */
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -41,10 +41,84 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+    
+    // Fetch dashboard stats
+    fetchDashboardStats();
 });
 
 // Variable to store Chart instance
 let liquidityChart = null;
+
+/**
+ * Fetch dashboard stats
+ */
+function fetchDashboardStats() {
+    fetch('/api_dashboard.php?action=stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateDashboardStats(data.data);
+            } else {
+                console.error('Error fetching dashboard stats:', data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching dashboard stats:', error);
+        });
+}
+
+/**
+ * Update dashboard stats with real data
+ */
+function updateDashboardStats(stats) {
+    // Update balance card
+    const balanceValue = document.querySelector('.stat-card:nth-child(1) .stat-value');
+    if (balanceValue) {
+        balanceValue.textContent = formatCurrency(stats.currentBalance);
+    }
+    
+    // Update income card
+    const incomeValue = document.querySelector('.stat-card:nth-child(2) .stat-value');
+    if (incomeValue) {
+        incomeValue.textContent = formatCurrency(stats.upcomingIncome);
+    }
+    
+    // Update expense card
+    const expenseValue = document.querySelector('.stat-card:nth-child(3) .stat-value');
+    if (expenseValue) {
+        expenseValue.textContent = formatCurrency(stats.upcomingExpenses);
+    }
+    
+    // Update debt card
+    const debtValue = document.querySelector('.stat-card:nth-child(4) .stat-value');
+    if (debtValue) {
+        debtValue.textContent = formatCurrency(stats.totalDebt);
+    }
+    
+    // Update trends
+    const balanceTrend = document.querySelector('.stat-card:nth-child(1) .stat-trend');
+    if (balanceTrend) {
+        const projectedChange = stats.projectedBalance - stats.currentBalance;
+        const percentChange = stats.currentBalance !== 0 ? (projectedChange / Math.abs(stats.currentBalance) * 100).toFixed(1) : 0;
+        
+        balanceTrend.className = 'stat-trend ' + (projectedChange >= 0 ? 'trend-up' : 'trend-down');
+        balanceTrend.innerHTML = `
+            <i class="fas ${projectedChange >= 0 ? 'fa-arrow-up' : 'fa-arrow-down'}"></i>
+            ${Math.abs(percentChange)}% projected change
+        `;
+    }
+}
+
+/**
+ * Format currency value
+ */
+function formatCurrency(value) {
+    return new Intl.NumberFormat('no-NO', { 
+        style: 'currency', 
+        currency: 'NOK',
+        minimumFractionDigits: 2
+    }).format(value);
+}
 
 /**
  * Initialize Liquidity Timeline Chart
@@ -64,7 +138,7 @@ function initLiquidityChart() {
             labels: [], // Will be populated via fetchTimelineData
             datasets: [
                 {
-                    label: 'Balance',
+                    label: 'Projected Balance',
                     data: [], // Will be populated via fetchTimelineData
                     backgroundColor: 'rgba(52, 152, 219, 0.1)',
                     borderColor: 'rgba(52, 152, 219, 1)',
@@ -78,7 +152,7 @@ function initLiquidityChart() {
                     tension: 0.2
                 },
                 {
-                    label: 'Income',
+                    label: 'Upcoming Income',
                     data: [], // Will be populated via fetchTimelineData
                     backgroundColor: 'rgba(46, 204, 113, 0)',
                     borderColor: 'rgba(46, 204, 113, 1)',
@@ -91,7 +165,7 @@ function initLiquidityChart() {
                     tension: 0.2
                 },
                 {
-                    label: 'Expenses',
+                    label: 'Upcoming Expenses',
                     data: [], // Will be populated via fetchTimelineData
                     backgroundColor: 'rgba(231, 76, 60, 0)',
                     borderColor: 'rgba(231, 76, 60, 1)',
@@ -174,7 +248,7 @@ function initLiquidityChart() {
         }
     });
     
-    // Fetch initial data (last 30 days)
+    // Fetch initial data (next 30 days)
     fetchTimelineData(30);
 }
 
@@ -184,61 +258,48 @@ function initLiquidityChart() {
 function fetchTimelineData(days) {
     if (!liquidityChart) return;
     
-    // In a real application, this would be an AJAX call to the server
-    // For demo purposes, generate random data
-    
-    const labels = [];
-    const incomeData = [];
-    const expenseData = [];
-    const balanceData = [];
-    
-    let balance = Math.random() * 10000 + 5000; // Starting balance
-    const today = new Date();
-    
-    for (let i = parseInt(days); i >= 0; i--) {
-        const date = new Date();
-        date.setDate(today.getDate() - i);
-        
-        // Format date label
-        const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        labels.push(label);
-        
-        // Generate random income and expense
-        let income = 0;
-        let expense = 0;
-        
-        // Add income on some days (higher probability on 1st and 15th of month)
-        const dayOfMonth = date.getDate();
-        const incomeProb = (dayOfMonth === 1 || dayOfMonth === 15) ? 0.8 : 0.2;
-        
-        if (Math.random() < incomeProb) {
-            income = Math.random() * 5000 + 1000;
-        }
-        
-        // Daily expenses (higher probability on weekends)
-        const dayOfWeek = date.getDay();
-        const expenseProb = (dayOfWeek === 0 || dayOfWeek === 6) ? 0.7 : 0.5;
-        
-        if (Math.random() < expenseProb) {
-            expense = Math.random() * 1000 + 200;
-        }
-        
-        // Update balance
-        balance += income - expense;
-        
-        incomeData.push(income);
-        expenseData.push(expense);
-        balanceData.push(balance);
+    // Show loading indicator
+    const ctx = document.getElementById('liquidityChart');
+    if (ctx) {
+        ctx.style.opacity = 0.5;
     }
     
-    // Update chart (safely)
-    if (liquidityChart) {
-        liquidityChart.data.labels = labels;
-        liquidityChart.data.datasets[0].data = balanceData;
-        liquidityChart.data.datasets[1].data = incomeData;
-        liquidityChart.data.datasets[2].data = expenseData;
-        liquidityChart.update();
-    }
+    // Fetch data from API
+    fetch(`/api_dashboard.php?action=timeline&days=${days}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateChartData(data.data);
+            } else {
+                console.error('Error fetching timeline data:', data.message);
+            }
+            
+            // Hide loading indicator
+            if (ctx) {
+                ctx.style.opacity = 1;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching timeline data:', error);
+            
+            // Hide loading indicator
+            if (ctx) {
+                ctx.style.opacity = 1;
+            }
+        });
+}
+
+/**
+ * Update chart with real data
+ */
+function updateChartData(data) {
+    if (!liquidityChart) return;
+    
+    liquidityChart.data.labels = data.labels;
+    liquidityChart.data.datasets[0].data = data.balanceData;
+    liquidityChart.data.datasets[1].data = data.incomeData;
+    liquidityChart.data.datasets[2].data = data.expenseData;
+    liquidityChart.update();
 }
 
 /**

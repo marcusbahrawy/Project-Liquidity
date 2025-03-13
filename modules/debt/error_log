@@ -1,0 +1,4 @@
+[13-Mar-2025 11:23:53 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function truncateText() in /home4/likviditetilleri/public_html/modules/debt/view.php:225
+Stack trace:
+#0 {main}
+  thrown in /home4/likviditetilleri/public_html/modules/debt/view.php on line 225

@@ -1,0 +1,20 @@
+[13-Mar-2025 11:34:15 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY093]: Invalid parameter number in /home4/likviditetilleri/public_html/index.php:31
+Stack trace:
+#0 /home4/likviditetilleri/public_html/index.php(31): PDOStatement->execute(Array)
+#1 {main}
+  thrown in /home4/likviditetilleri/public_html/index.php on line 31
+[13-Mar-2025 11:34:54 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY093]: Invalid parameter number in /home4/likviditetilleri/public_html/index.php:31
+Stack trace:
+#0 /home4/likviditetilleri/public_html/index.php(31): PDOStatement->execute(Array)
+#1 {main}
+  thrown in /home4/likviditetilleri/public_html/index.php on line 31
+[13-Mar-2025 11:35:26 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY093]: Invalid parameter number in /home4/likviditetilleri/public_html/index.php:31
+Stack trace:
+#0 /home4/likviditetilleri/public_html/index.php(31): PDOStatement->execute(Array)
+#1 {main}
+  thrown in /home4/likviditetilleri/public_html/index.php on line 31
+[13-Mar-2025 11:37:37 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[HY093]: Invalid parameter number in /home4/likviditetilleri/public_html/index.php:98
+Stack trace:
+#0 /home4/likviditetilleri/public_html/index.php(98): PDOStatement->execute(Array)
+#1 {main}
+  thrown in /home4/likviditetilleri/public_html/index.php on line 98
