@@ -26,31 +26,62 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
- * Initialize Bootstrap-like tooltips
+ * Initialize Bootstrap-like tooltips with improved positioning
  */
 function initializeTooltips() {
+    // Remove any existing tooltips first
+    const existingTooltip = document.querySelector('.tooltip');
+    if (existingTooltip) {
+        existingTooltip.remove();
+    }
+    
+    // Create single reusable tooltip element
+    const tooltip = document.createElement('div');
+    tooltip.className = 'tooltip';
+    tooltip.style.opacity = '0';
+    tooltip.style.position = 'fixed';
+    tooltip.style.pointerEvents = 'none';
+    document.body.appendChild(tooltip);
+    
     const tooltips = document.querySelectorAll('[data-tooltip]');
     
     tooltips.forEach(element => {
-        element.addEventListener('mouseover', function() {
-            const tooltipText = this.getAttribute('data-tooltip');
+        element.addEventListener('mouseenter', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             
-            const tooltip = document.createElement('div');
-            tooltip.className = 'tooltip';
+            const tooltipText = this.getAttribute('data-tooltip');
             tooltip.innerHTML = tooltipText;
             
-            document.body.appendChild(tooltip);
+            // Set initial position off-screen to measure size without affecting layout
+            tooltip.style.left = '-9999px';
+            tooltip.style.top = '-9999px';
+            tooltip.style.opacity = '1';
             
+            // Get element position
             const rect = this.getBoundingClientRect();
-            const tooltipRect = tooltip.getBoundingClientRect();
             
-            tooltip.style.left = rect.left + (rect.width / 2) - (tooltipRect.width / 2) + 'px';
-            tooltip.style.top = rect.top - tooltipRect.height - 10 + 'px';
+            // Get tooltip dimensions
+            const tooltipWidth = tooltip.offsetWidth;
+            const tooltipHeight = tooltip.offsetHeight;
             
-            this.addEventListener('mouseout', function() {
-                tooltip.remove();
-            });
+            // Calculate position (centered above the element)
+            const left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+            const top = rect.top - tooltipHeight - 8;
+            
+            // Position tooltip
+            tooltip.style.left = `${left}px`;
+            tooltip.style.top = `${top}px`;
         });
+        
+        element.addEventListener('mouseleave', function() {
+            tooltip.style.opacity = '0';
+        });
+    });
+    
+    // Hide tooltip when clicking anywhere
+    document.addEventListener('click', function() {
+        tooltip.style.opacity = '0';
     });
 }
 

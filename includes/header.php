@@ -56,10 +56,40 @@ function isActive($path, $exact = false) {
     <!-- Custom CSS -->
     <style>
     :root {
+        /* Prevent layout shifts from tooltips and button hovers */
+html, body {
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+}
+
+/* Use GPU acceleration to prevent layout shifts */
+.app-container, .main-content, .content {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
         /* Primary Colors */
         --primary: #3498db;
         --primary-light: #5dade2;
         --primary-dark: #2980b9;
+        
+        /* Prevent scrollbar appearance/disappearance from causing layout shifts */
+html {
+    overflow-y: scroll; /* Always show the vertical scrollbar */
+    scrollbar-gutter: stable; /* Reserve space for the scrollbar even when not needed (for newer browsers) */
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+}
         
         /* Secondary Colors */
         --secondary: #2ecc71;

@@ -443,3 +443,144 @@
 .bg-warning {
     background-color: var(--warning) !important;
 }
+
+/* Fix for tooltip-related layout shifts */
+.tooltip {
+    position: fixed !important;
+    z-index: 9999;
+    background-color: rgba(44, 62, 80, 0.9);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    max-width: 200px;
+    text-align: center;
+}
+
+/* Fix for button hover causing layout shift */
+.table-actions {
+    display: flex;
+    gap: 8px;
+    min-width: 100px; /* Ensure consistent width */
+}
+
+.table-actions .btn {
+    flex: 0 0 32px; /* Fixed width */
+    height: 32px;    /* Fixed height */
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+.table-actions .btn:hover {
+    transform: scale(1.05);
+}
+
+.table-actions .btn i {
+    /* Ensure consistent icon size */
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Ensure action column has consistent width */
+table th:last-child,
+table td:last-child {
+    width: 110px; 
+    min-width: 110px;
+    white-space: nowrap;
+}
+
+/* More aggressive fixes for tooltip and button hover issues */
+
+/* Prevent horizontal scrolling in the entire application */
+html, body {
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
+}
+
+/* Fix for tooltip-related layout shifts */
+.tooltip {
+    position: fixed !important;
+    z-index: 9999;
+    background-color: rgba(44, 62, 80, 0.9);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    pointer-events: none;
+    max-width: 200px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+/* Fix for actions column */
+.table-actions {
+    display: flex;
+    gap: 8px;
+    min-width: 100px;
+}
+
+/* Make buttons fixed size and disable transforms */
+.table-actions .btn {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+/* Use background-color change instead of transform for hover effect */
+.table-actions .btn:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.table-actions .btn-primary:hover {
+    background-color: var(--primary-dark);
+}
+
+.table-actions .btn-danger:hover {
+    background-color: #c0392b;
+}
+
+.table-actions .btn-info:hover {
+    background-color: #2574a9;
+}
+
+.table-actions .btn-success:hover {
+    background-color: var(--secondary-dark);
+}
+
+/* Ensure icons are centered and consistently sized */
+.table-actions .btn i {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* Ensure action column has consistent width */
+table th:last-child,
+table td:last-child {
+    width: 110px; 
+    min-width: 110px;
+}
+
+/* Stop all transitions that might cause layout shifts */
+.app-container, .main-content, .content {
+    transform: translateZ(0);
+}

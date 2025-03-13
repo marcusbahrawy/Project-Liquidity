@@ -114,7 +114,7 @@ require_once '../../includes/header.php';
         <?php if ($isSplitItem): ?>
             <div class="alert alert-info">
                 <i class="fas fa-info-circle"></i>
-                This is part of a split transaction. Some changes may affect the parent transaction.
+                This is part of a split transaction.
             </div>
         <?php endif; ?>
         
@@ -122,6 +122,7 @@ require_once '../../includes/header.php';
             <input type="hidden" name="id" value="<?php echo $transaction['id']; ?>">
             <input type="hidden" name="is_debt" value="<?php echo $is_debt ? 1 : 0; ?>">
             
+            <?php if (!$isSplitItem): ?>
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label for="description">Description *</label>
@@ -218,6 +219,27 @@ require_once '../../includes/header.php';
                 <label for="notes">Notes</label>
                 <textarea id="notes" name="notes" class="form-control" rows="3"><?php echo htmlspecialchars($transaction['notes'] ?? ''); ?></textarea>
             </div>
+            <?php else: ?>
+            <!-- For split items, only show amount and date fields -->
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="amount">Amount (kr) *</label>
+                    <input type="number" id="amount" name="amount" class="form-control" step="0.01" min="0.01" value="<?php echo $transaction['amount']; ?>" required>
+                    <div class="invalid-feedback">Please provide a valid amount greater than 0.</div>
+                </div>
+                
+                <div class="form-group col-md-6">
+                    <label for="date">Date *</label>
+                    <input type="date" id="date" name="date" class="form-control datepicker" value="<?php echo $transaction['date']; ?>" required>
+                    <div class="invalid-feedback">Please select a date.</div>
+                </div>
+            </div>
+            
+            <!-- Add hidden fields to maintain data structure -->
+            <input type="hidden" name="description" value="<?php echo htmlspecialchars($transaction['description']); ?>">
+            <input type="hidden" name="category_id" value="<?php echo $transaction['category_id']; ?>">
+            <input type="hidden" name="notes" value="<?php echo htmlspecialchars($transaction['notes'] ?? ''); ?>">
+            <?php endif; ?>
             
             <?php if (!$is_debt && !$isSplitItem && !$isSplit): ?>
             <div class="form-divider">
@@ -608,3 +630,4 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
 // Include footer
 require_once '../../includes/footer.php';
+?>
