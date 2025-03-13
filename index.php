@@ -50,10 +50,13 @@ $endDate = date('Y-m-d', strtotime("+{$timeRange} days"));
 $initialBalance = getInitialBalance();
 
 // Get transaction sum (all transactions up to current date)
+// MODIFIED: Updated to include split items and exclude parent transactions
 $stmt = $pdo->prepare("
     SELECT 
-        (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date_inc AND parent_id IS NULL) -
-        (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date_out AND parent_id IS NULL) as transaction_sum
+        (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date_inc 
+         AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))) -
+        (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date_out 
+         AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))) as transaction_sum
 ");
 $stmt->execute([
     'current_date_inc' => $currentDate,
@@ -66,11 +69,12 @@ $transactionSum = $result['transaction_sum'] ?? 0;
 $balance = $initialBalance + $transactionSum;
 
 // Get upcoming income for the next x days
+// MODIFIED: Updated to include split items and exclude parent transactions
 $stmt = $pdo->prepare("
     SELECT COALESCE(SUM(amount), 0) as total 
     FROM incoming 
     WHERE date BETWEEN :start_date AND :end_date
-    AND parent_id IS NULL
+    AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
 ");
 $stmt->execute([
     'start_date' => $currentDate,
@@ -80,11 +84,12 @@ $income = $stmt->fetch();
 $totalIncome = $income['total'] ?? 0;
 
 // Get upcoming expenses for the next x days
+// MODIFIED: Updated to include split items and exclude parent transactions
 $stmt = $pdo->prepare("
     SELECT COALESCE(SUM(amount), 0) as total 
     FROM outgoing 
     WHERE date BETWEEN :start_date AND :end_date
-    AND parent_id IS NULL
+    AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
 ");
 $stmt->execute([
     'start_date' => $currentDate,
@@ -106,18 +111,21 @@ $debtTotal = $stmt->fetch();
 $totalDebt = $debtTotal['total'] ?? 0;
 
 // Get upcoming transactions (both incoming and outgoing)
+// MODIFIED: Updated to include split items and exclude parent transactions
 $stmt = $pdo->prepare("
     (SELECT 'incoming' as type, i.id, i.description, i.amount, i.date, c.name as category, c.color
      FROM incoming i
      LEFT JOIN categories c ON i.category_id = c.id
-     WHERE i.date BETWEEN :current_date_inc AND :end_date_inc AND i.parent_id IS NULL
+     WHERE i.date BETWEEN :current_date_inc AND :end_date_inc 
+     AND (i.parent_id IS NOT NULL OR (i.parent_id IS NULL AND i.is_split = 0))
      ORDER BY i.date ASC
      LIMIT 15)
     UNION ALL
     (SELECT 'outgoing' as type, o.id, o.description, o.amount, o.date, c.name as category, c.color
      FROM outgoing o
      LEFT JOIN categories c ON o.category_id = c.id
-     WHERE o.date BETWEEN :current_date_out AND :end_date_out AND o.parent_id IS NULL
+     WHERE o.date BETWEEN :current_date_out AND :end_date_out 
+     AND (o.parent_id IS NOT NULL OR (o.parent_id IS NULL AND o.is_split = 0))
      ORDER BY o.date ASC
      LIMIT 15)
     ORDER BY date ASC

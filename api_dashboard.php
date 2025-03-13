@@ -81,22 +81,25 @@ function getTransactionsData() {
         $endDate = date('Y-m-d', strtotime("+$days days"));
         
         // Get transactions for the selected period
+        // MODIFIED: Include split items and exclude parent transactions
         $stmt = $pdo->prepare("
             (SELECT 'incoming' as type, i.id, i.description, i.amount, i.date, c.name as category, c.color
              FROM incoming i
              LEFT JOIN categories c ON i.category_id = c.id
-             WHERE i.date BETWEEN :current_date_inc AND :end_date_inc AND i.parent_id IS NULL
+             WHERE i.date BETWEEN :current_date_inc AND :end_date_inc 
+             AND (i.parent_id IS NOT NULL OR (i.parent_id IS NULL AND i.is_split = 0))
              ORDER BY i.date ASC
-             LIMIT 20)
+             LIMIT 40)
             UNION ALL
             (SELECT 'outgoing' as type, o.id, o.description, o.amount, o.date, c.name as category, c.color
              FROM outgoing o
              LEFT JOIN categories c ON o.category_id = c.id
-             WHERE o.date BETWEEN :current_date_out AND :end_date_out AND o.parent_id IS NULL
+             WHERE o.date BETWEEN :current_date_out AND :end_date_out 
+             AND (o.parent_id IS NOT NULL OR (o.parent_id IS NULL AND o.is_split = 0))
              ORDER BY o.date ASC
-             LIMIT 20)
+             LIMIT 40)
             ORDER BY date ASC
-            LIMIT 20
+            LIMIT 40
         ");
         $stmt->execute([
             'current_date_inc' => $currentDate,
@@ -111,7 +114,8 @@ function getTransactionsData() {
             SELECT c.id, c.name, c.color, COALESCE(SUM(o.amount), 0) as total
             FROM categories c
             JOIN outgoing o ON o.category_id = c.id 
-            WHERE o.date BETWEEN :current_date AND :end_date AND o.is_debt = 0 AND o.parent_id IS NULL
+            WHERE o.date BETWEEN :current_date AND :end_date AND o.is_debt = 0
+            AND (o.parent_id IS NOT NULL OR (o.parent_id IS NULL AND o.is_split = 0))
             GROUP BY c.id, c.name, c.color
             HAVING total > 0
             ORDER BY total DESC
@@ -123,13 +127,13 @@ function getTransactionsData() {
         ]);
         $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Get summary stats
+        // Get summary stats with improved handling of splits
         // Get upcoming income
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(amount), 0) as total 
             FROM incoming 
             WHERE date BETWEEN :start_date AND :end_date
-            AND parent_id IS NULL
+            AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
         ");
         $stmt->execute([
             'start_date' => $currentDate,
@@ -143,7 +147,7 @@ function getTransactionsData() {
             SELECT COALESCE(SUM(amount), 0) as total 
             FROM outgoing 
             WHERE date BETWEEN :start_date AND :end_date
-            AND parent_id IS NULL
+            AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
         ");
         $stmt->execute([
             'start_date' => $currentDate,
@@ -156,8 +160,10 @@ function getTransactionsData() {
         $initialBalance = getInitialBalance();
         $stmt = $pdo->prepare("
             SELECT 
-                (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date_inc AND parent_id IS NULL) -
-                (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date_out AND parent_id IS NULL) as transaction_sum
+                (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date_inc 
+                 AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))) -
+                (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date_out 
+                 AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))) as transaction_sum
         ");
         $stmt->execute([
             'current_date_inc' => $currentDate,
@@ -240,6 +246,24 @@ function debugData() {
     // Get initial balance
     $debug['initial_balance'] = getInitialBalance();
     
+    // Count splits
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM incoming WHERE parent_id IS NOT NULL");
+    $stmt->execute();
+    $debug['incoming_splits_count'] = $stmt->fetch()['count'];
+    
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM outgoing WHERE parent_id IS NOT NULL");
+    $stmt->execute();
+    $debug['outgoing_splits_count'] = $stmt->fetch()['count'];
+    
+    // Count parent transactions
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM incoming WHERE parent_id IS NULL AND is_split = 1");
+    $stmt->execute();
+    $debug['incoming_parents_count'] = $stmt->fetch()['count'];
+    
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM outgoing WHERE parent_id IS NULL AND is_split = 1");
+    $stmt->execute();
+    $debug['outgoing_parents_count'] = $stmt->fetch()['count'];
+    
     // Sample of some data
     $debug['current_date'] = $currentDate;
     $debug['php_version'] = phpversion();
@@ -292,10 +316,13 @@ function getTimelineData() {
         $initialBalance = getInitialBalance();
         
         // Get current account balance (initial balance + all past transactions)
+        // MODIFIED: Updated to include split items and exclude parent transactions
         $stmt = $pdo->prepare("
             SELECT 
-                (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date_inc AND parent_id IS NULL) -
-                (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date_out AND parent_id IS NULL) as transaction_sum
+                (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date_inc 
+                 AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))) -
+                (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date_out 
+                 AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))) as transaction_sum
         ");
         $stmt->execute([
             'current_date_inc' => $currentDate,
@@ -308,11 +335,12 @@ function getTimelineData() {
         $currentBalance = $initialBalance + $transactionSum;
         
         // Get incoming transactions for the date range
+        // MODIFIED: Include split items and exclude parent transactions
         $stmt = $pdo->prepare("
             SELECT date, SUM(amount) as total 
             FROM incoming 
             WHERE date BETWEEN :start_date AND :end_date
-            AND parent_id IS NULL
+            AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
             GROUP BY date
         ");
         $stmt->execute([
@@ -330,11 +358,12 @@ function getTimelineData() {
         }
         
         // Get non-recurring outgoing transactions for the date range
+        // MODIFIED: Include split items and exclude parent transactions
         $stmt = $pdo->prepare("
             SELECT date, SUM(amount) as total 
             FROM outgoing 
             WHERE date BETWEEN :start_date AND :end_date
-            AND parent_id IS NULL
+            AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
             AND (is_fixed = 0 OR repeat_interval = 'none')
             GROUP BY date
         ");
@@ -354,6 +383,7 @@ function getTimelineData() {
         
         // Handle recurring transactions
         // Get all recurring expenses that might occur in our range
+        // For recurring transactions, we still use the parent transaction (is_split=0)
         $stmt = $pdo->prepare("
             SELECT id, description, amount, date, repeat_interval, repeat_until
             FROM outgoing 
@@ -373,6 +403,29 @@ function getTimelineData() {
             $endDateForExpense = $expense['repeat_until'] ? min($expense['repeat_until'], $endDate) : $endDate;
             $interval = $expense['repeat_interval'];
             $amount = (float)$expense['amount'];
+            
+            // Check if this is a split transaction
+            $isSplit = false;
+            if ($expense['id']) {
+                $splitCheckStmt = $pdo->prepare("
+                    SELECT is_split FROM outgoing WHERE id = :id
+                ");
+                $splitCheckStmt->execute(['id' => $expense['id']]);
+                $splitResult = $splitCheckStmt->fetch();
+                $isSplit = $splitResult && $splitResult['is_split'] == 1;
+            }
+            
+            // If it's a split transaction, get the splits instead
+            if ($isSplit) {
+                $splitStmt = $pdo->prepare("
+                    SELECT amount FROM outgoing WHERE parent_id = :parent_id
+                ");
+                $splitStmt->execute(['parent_id' => $expense['id']]);
+                $splits = $splitStmt->fetchAll();
+                
+                // Don't process this recurring expense if it's a split parent
+                continue;
+            }
             
             // Calculate occurrences using DateTime for better accuracy
             $date = new DateTime($startDate);
@@ -444,7 +497,8 @@ function getTimelineData() {
                 'start_date' => $startDate,
                 'end_date' => $endDateForExpense,
                 'interval' => $interval,
-                'occurrences' => $occurrences
+                'occurrences' => $occurrences,
+                'is_split' => $isSplit
             ];
         }
         
@@ -509,11 +563,14 @@ function getDashboardStats() {
         // Get initial balance
         $initialBalance = getInitialBalance();
         
+        // MODIFIED: Updated to include split items and exclude parent transactions
         // Get transaction sum (all transactions up to current date)
         $stmt = $pdo->prepare("
             SELECT 
-                (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date_inc AND parent_id IS NULL) -
-                (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date_out AND parent_id IS NULL) as transaction_sum
+                (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date_inc 
+                 AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))) -
+                (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date_out 
+                 AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))) as transaction_sum
         ");
         $stmt->execute([
             'current_date_inc' => $currentDate,
@@ -525,12 +582,12 @@ function getDashboardStats() {
         // Current balance is initial balance + all transactions
         $currentBalance = $initialBalance + $transactionSum;
         
-        // Get upcoming income for the next 30 days
+        // MODIFIED: Get upcoming income for the next 30 days, using split transactions
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(amount), 0) as total 
             FROM incoming 
             WHERE date BETWEEN :start_date AND :end_date
-            AND parent_id IS NULL
+            AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
         ");
         $stmt->execute([
             'start_date' => $currentDate,
@@ -539,12 +596,12 @@ function getDashboardStats() {
         $result = $stmt->fetch();
         $upcomingIncome = (float)$result['total'];
         
-        // Get upcoming non-recurring expenses for the next 30 days
+        // MODIFIED: Get upcoming non-recurring expenses for the next 30 days, using split transactions
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(amount), 0) as total 
             FROM outgoing 
             WHERE date BETWEEN :start_date AND :end_date
-            AND parent_id IS NULL
+            AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
             AND (is_fixed = 0 OR repeat_interval = 'none')
         ");
         $stmt->execute([
@@ -558,8 +615,9 @@ function getDashboardStats() {
         $upcomingExpenseRecurring = 0;
         $endDate = date('Y-m-d', strtotime('+30 days'));
         
+        // For recurring transactions, we only count non-split parent transactions
         $stmt = $pdo->prepare("
-            SELECT id, description, amount, date, repeat_interval, repeat_until
+            SELECT id, description, amount, date, repeat_interval, repeat_until, is_split
             FROM outgoing 
             WHERE is_fixed = 1 
             AND repeat_interval != 'none'
@@ -570,6 +628,11 @@ function getDashboardStats() {
         $recurringExpenses = $stmt->fetchAll();
         
         foreach ($recurringExpenses as $expense) {
+            // Skip if it's a split parent - we'll handle split children separately
+            if ($expense['is_split'] == 1) {
+                continue;
+            }
+            
             $startDate = $expense['date'];
             $endDateForExpense = $expense['repeat_until'] ? min($expense['repeat_until'], $endDate) : $endDate;
             $interval = $expense['repeat_interval'];
@@ -673,4 +736,3 @@ function jsonResponse($success, $message, $data = []) {
     ]);
     exit;
 }
-?>
