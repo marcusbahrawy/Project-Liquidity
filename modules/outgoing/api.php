@@ -161,6 +161,9 @@ function addTransaction() {
                 
                 $totalSplitAmount += $split['amount'];
                 
+                // Get the split date or use parent date if not provided
+                $splitDate = !empty($split['date']) ? $split['date'] : $_POST['date'];
+                
                 // Insert split transaction
                 $stmt = $pdo->prepare("
                     INSERT INTO outgoing (
@@ -176,7 +179,7 @@ function addTransaction() {
                 $stmt->execute([
                     'description' => $split['description'],
                     'amount' => $split['amount'],
-                    'date' => $_POST['date'],
+                    'date' => $splitDate,
                     'category_id' => !empty($split['category_id']) ? $split['category_id'] : null,
                     'notes' => $split['notes'] ?? null,
                     'parent_id' => $outgoingId,
@@ -587,6 +590,9 @@ function updateTransaction() {
                     
                     $totalSplitAmount += $split['amount'];
                     
+                    // Get the split date or use parent date if not provided
+                    $splitDate = !empty($split['date']) ? $split['date'] : $_POST['date'];
+                    
                     // Insert split transaction
                     $stmt = $pdo->prepare("
                         INSERT INTO outgoing (
@@ -602,7 +608,7 @@ function updateTransaction() {
                     $stmt->execute([
                         'description' => $split['description'],
                         'amount' => $split['amount'],
-                        'date' => $_POST['date'],
+                        'date' => $splitDate,
                         'category_id' => !empty($split['category_id']) ? $split['category_id'] : null,
                         'notes' => $split['notes'] ?? null,
                         'parent_id' => $_POST['id'],
