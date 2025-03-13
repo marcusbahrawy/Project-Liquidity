@@ -1,6 +1,7 @@
 <?php
 /**
  * Main Index File with Future Data and Dynamic Date Range
+ * Updated with better split transaction handling in dashboard
  */
 
 // Include database connection
@@ -111,21 +112,21 @@ $debtTotal = $stmt->fetch();
 $totalDebt = $debtTotal['total'] ?? 0;
 
 // Get upcoming transactions (both incoming and outgoing)
-// MODIFIED: Updated to include split items and exclude parent transactions
+// MODIFIED: Fetch only parent transactions first
 $stmt = $pdo->prepare("
-    (SELECT 'incoming' as type, i.id, i.description, i.amount, i.date, c.name as category, c.color
+    (SELECT 'incoming' as type, i.id, i.description, i.amount, i.date, i.is_split, c.name as category, c.color
      FROM incoming i
      LEFT JOIN categories c ON i.category_id = c.id
      WHERE i.date BETWEEN :current_date_inc AND :end_date_inc 
-     AND (i.parent_id IS NOT NULL OR (i.parent_id IS NULL AND i.is_split = 0))
+     AND i.parent_id IS NULL
      ORDER BY i.date ASC
      LIMIT 15)
     UNION ALL
-    (SELECT 'outgoing' as type, o.id, o.description, o.amount, o.date, c.name as category, c.color
+    (SELECT 'outgoing' as type, o.id, o.description, o.amount, o.date, o.is_split, c.name as category, c.color
      FROM outgoing o
      LEFT JOIN categories c ON o.category_id = c.id
      WHERE o.date BETWEEN :current_date_out AND :end_date_out 
-     AND (o.parent_id IS NOT NULL OR (o.parent_id IS NULL AND o.is_split = 0))
+     AND o.parent_id IS NULL
      ORDER BY o.date ASC
      LIMIT 15)
     ORDER BY date ASC
@@ -138,6 +139,47 @@ $stmt->execute([
     'end_date_out' => $endDate
 ]);
 $upcomingTransactions = $stmt->fetchAll();
+
+// Process transactions to include split items
+$organizedTransactions = [];
+
+foreach ($upcomingTransactions as $transaction) {
+    // Add the transaction to our organized list
+    $organizedTransaction = $transaction;
+    
+    // If it's a split transaction, fetch its split items
+    if ($transaction['is_split']) {
+        $splits = [];
+        
+        if ($transaction['type'] === 'incoming') {
+            // Fetch incoming split items
+            $splitStmt = $pdo->prepare("
+                SELECT i.id, i.description, i.amount, i.date, c.name as category, c.color
+                FROM incoming i
+                LEFT JOIN categories c ON i.category_id = c.id
+                WHERE i.parent_id = :parent_id
+                ORDER BY i.amount DESC
+            ");
+            $splitStmt->execute(['parent_id' => $transaction['id']]);
+            $splits = $splitStmt->fetchAll();
+        } else {
+            // Fetch outgoing split items
+            $splitStmt = $pdo->prepare("
+                SELECT o.id, o.description, o.amount, o.date, c.name as category, c.color
+                FROM outgoing o
+                LEFT JOIN categories c ON o.category_id = c.id
+                WHERE o.parent_id = :parent_id
+                ORDER BY o.amount DESC
+            ");
+            $splitStmt->execute(['parent_id' => $transaction['id']]);
+            $splits = $splitStmt->fetchAll();
+        }
+        
+        $organizedTransaction['splits'] = $splits;
+    }
+    
+    $organizedTransactions[] = $organizedTransaction;
+}
 
 // Include header
 require_once 'includes/header.php';
@@ -235,14 +277,14 @@ require_once 'includes/header.php';
             </div>
             
             <div id="transactions-container" class="expense-list">
-                <?php if (empty($upcomingTransactions)): ?>
+                <?php if (empty($organizedTransactions)): ?>
                     <div class="expense-item">
                         <div class="expense-details">
                             <div class="expense-title">No upcoming transactions</div>
                         </div>
                     </div>
                 <?php else: ?>
-                    <?php foreach ($upcomingTransactions as $transaction): ?>
+                    <?php foreach ($organizedTransactions as $transaction): ?>
                         <div class="expense-item">
                             <div class="expense-date">
                                 <div class="expense-day"><?php echo date('d', strtotime($transaction['date'])); ?></div>
@@ -251,6 +293,9 @@ require_once 'includes/header.php';
                             <div class="expense-details">
                                 <div class="expense-title">
                                     <?php echo htmlspecialchars($transaction['description']); ?>
+                                    <?php if ($transaction['is_split']): ?>
+                                        <span class="badge badge-info">Split</span>
+                                    <?php endif; ?>
                                     <span class="transaction-type-badge type-<?php echo $transaction['type']; ?>">
                                         <?php echo ($transaction['type'] === 'incoming') ? 'Income' : 'Expense'; ?>
                                     </span>
@@ -261,6 +306,24 @@ require_once 'includes/header.php';
                                 <?php echo ($transaction['type'] === 'incoming' ? '+' : '-'); ?><?php echo number_format($transaction['amount'], 2); ?> kr
                             </div>
                         </div>
+                        
+                        <?php if (isset($transaction['splits']) && !empty($transaction['splits'])): ?>
+                            <?php foreach ($transaction['splits'] as $split): ?>
+                                <div class="expense-item split-item">
+                                    <div class="expense-date" style="visibility: hidden;"></div>
+                                    <div class="expense-details split-details">
+                                        <div class="expense-title">
+                                            <i class="fas fa-level-down-alt"></i>
+                                            <?php echo htmlspecialchars($split['description']); ?>
+                                        </div>
+                                        <div class="expense-category"><?php echo htmlspecialchars($split['category'] ?? 'Uncategorized'); ?></div>
+                                    </div>
+                                    <div class="expense-amount <?php echo ($transaction['type'] === 'incoming') ? 'amount-income' : 'amount-expense'; ?>">
+                                        <?php echo ($transaction['type'] === 'incoming' ? '+' : '-'); ?><?php echo number_format($split['amount'], 2); ?> kr
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
@@ -340,9 +403,34 @@ require_once 'includes/header.php';
     font-weight: normal;
     color: var(--gray);
 }
+
+/* Split transaction styling */
+.split-details {
+    padding-left: 20px; /* Indentation for splits */
+}
+
+.split-item {
+    background-color: rgba(236, 240, 241, 0.5); /* Light background to distinguish splits */
+    border-top: none; /* Remove top border to make it look connected */
+}
+
+.split-item .expense-title i {
+    margin-right: 5px;
+    color: var(--gray);
+}
+
+.badge-info {
+    background-color: rgba(52, 152, 219, 0.2);
+    color: var(--primary-dark);
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 5px;
+}
 </style>
 
-<!-- Custom Script for Dynamic Date Range -->
+<!-- Custom Script for Dynamic Date Range with Split Transaction Support -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Get the timeline range dropdown
@@ -390,7 +478,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Update transactions list in UI
+    // Update transactions list in UI with split support
     function updateTransactionsList(transactions) {
         const container = document.getElementById('transactions-container');
         
@@ -414,6 +502,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const day = date.getDate().toString().padStart(2, '0');
             const month = date.toLocaleString('default', { month: 'short' });
             
+            // Add the main transaction
             container.innerHTML += `
                 <div class="expense-item">
                     <div class="expense-date">
@@ -423,6 +512,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="expense-details">
                         <div class="expense-title">
                             ${escapeHtml(transaction.description)}
+                            ${transaction.is_split ? '<span class="badge badge-info">Split</span>' : ''}
                             <span class="transaction-type-badge type-${transaction.type}">
                                 ${transaction.type === 'incoming' ? 'Income' : 'Expense'}
                             </span>
@@ -434,6 +524,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             `;
+            
+            // Add split items if any
+            if (transaction.splits && transaction.splits.length > 0) {
+                transaction.splits.forEach(split => {
+                    container.innerHTML += `
+                        <div class="expense-item split-item">
+                            <div class="expense-date" style="visibility: hidden;"></div>
+                            <div class="expense-details split-details">
+                                <div class="expense-title">
+                                    <i class="fas fa-level-down-alt"></i>
+                                    ${escapeHtml(split.description)}
+                                </div>
+                                <div class="expense-category">${escapeHtml(split.category || 'Uncategorized')}</div>
+                            </div>
+                            <div class="expense-amount ${transaction.type === 'incoming' ? 'amount-income' : 'amount-expense'}">
+                                ${transaction.type === 'incoming' ? '+' : '-'}${formatNumber(split.amount)} kr
+                            </div>
+                        </div>
+                    `;
+                });
+            }
         });
     }
     
