@@ -285,8 +285,12 @@ require_once 'includes/header.php';
                     </div>
                 <?php else: ?>
                     <?php foreach ($organizedTransactions as $transaction): ?>
+                        <?php 
+                        // Determine if we should hide the date (if it has splits)
+                        $hasChildSplits = isset($transaction['splits']) && !empty($transaction['splits']);
+                        ?>
                         <div class="expense-item">
-                            <div class="expense-date">
+                            <div class="expense-date" <?php echo $hasChildSplits ? 'style="display: none;"' : ''; ?>>
                                 <div class="expense-day"><?php echo date('d', strtotime($transaction['date'])); ?></div>
                                 <div class="expense-month"><?php echo date('M', strtotime($transaction['date'])); ?></div>
                             </div>
@@ -310,7 +314,7 @@ require_once 'includes/header.php';
                         <?php if (isset($transaction['splits']) && !empty($transaction['splits'])): ?>
                             <?php foreach ($transaction['splits'] as $split): ?>
                                 <div class="expense-item split-item">
-                                    <!-- MODIFIED: Show the actual split date instead of hiding it -->
+                                    <!-- Show date only for split items -->
                                     <div class="expense-date">
                                         <div class="expense-day"><?php echo date('d', strtotime($split['date'])); ?></div>
                                         <div class="expense-month"><?php echo date('M', strtotime($split['date'])); ?></div>
@@ -320,7 +324,7 @@ require_once 'includes/header.php';
                                             <i class="fas fa-level-down-alt"></i>
                                             <?php echo htmlspecialchars($split['description']); ?>
                                         </div>
-                                        <div class="expense-category"><?php echo htmlspecialchars($split['category'] ?? 'Uncategorized'); ?></div>
+                                        <!-- Category hidden for splits -->
                                     </div>
                                     <div class="expense-amount <?php echo ($transaction['type'] === 'incoming') ? 'amount-income' : 'amount-expense'; ?>">
                                         <?php echo ($transaction['type'] === 'incoming' ? '+' : '-'); ?><?php echo number_format($split['amount'], 2); ?> kr
@@ -531,15 +535,25 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Add split items if any
             if (transaction.splits && transaction.splits.length > 0) {
+                // Hide the date on the parent transaction
+                const parentItems = container.querySelectorAll('.expense-item');
+                const parentItem = parentItems[parentItems.length - 1]; // Get the last added item (parent)
+                if (parentItem) {
+                    const dateElement = parentItem.querySelector('.expense-date');
+                    if (dateElement) {
+                        dateElement.style.display = 'none';
+                    }
+                }
+                
                 transaction.splits.forEach(split => {
-                    // MODIFIED: Create a separate date display for the split item
+                    // Create a separate date display for the split item
                     const splitDate = new Date(split.date);
                     const splitDay = splitDate.getDate().toString().padStart(2, '0');
                     const splitMonth = splitDate.toLocaleString('default', { month: 'short' });
                     
                     container.innerHTML += `
                         <div class="expense-item split-item">
-                            <!-- MODIFIED: Show the actual split date instead of hiding it -->
+                            <!-- Show date for split items -->
                             <div class="expense-date">
                                 <div class="expense-day">${splitDay}</div>
                                 <div class="expense-month">${splitMonth}</div>
@@ -549,7 +563,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <i class="fas fa-level-down-alt"></i>
                                     ${escapeHtml(split.description)}
                                 </div>
-                                <div class="expense-category">${escapeHtml(split.category || 'Uncategorized')}</div>
+                                <!-- Category hidden for splits -->
                             </div>
                             <div class="expense-amount ${transaction.type === 'incoming' ? 'amount-income' : 'amount-expense'}">
                                 ${transaction.type === 'incoming' ? '+' : '-'}${formatNumber(split.amount)} kr
