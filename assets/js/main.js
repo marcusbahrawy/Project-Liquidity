@@ -338,3 +338,78 @@ function formatDate(date, format = 'short') {
     
     return dateObj.toLocaleDateString('no-NO');
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Find all delete buttons
+    const deleteButtons = document.querySelectorAll('.delete-btn');
+    
+    deleteButtons.forEach(button => {
+        // Remove existing click handlers to avoid conflicts
+        const newButton = button.cloneNode(true);
+        button.parentNode.replaceChild(newButton, button);
+        
+        // Add our click handler
+        newButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Get item name for the confirmation message
+            const itemName = this.getAttribute('data-name') || 'this item';
+            const deleteUrl = this.getAttribute('href');
+            
+            // Show confirmation dialog
+            if (confirm(`Are you sure you want to delete ${itemName}? This action cannot be undone.`)) {
+                // Redirect to the delete URL
+                window.location.href = deleteUrl;
+            }
+        });
+    });
+    
+    // Add support for the direct API calls using fetch
+    const apiDeleteLinks = document.querySelectorAll('[data-action="delete"]');
+    apiDeleteLinks.forEach(link => {
+        // Remove existing click handlers
+        const newLink = link.cloneNode(true);
+        link.parentNode.replaceChild(newLink, link);
+        
+        // Add our click handler
+        newLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const itemName = this.getAttribute('data-name') || 'this item';
+            const deleteUrl = this.getAttribute('href') || this.getAttribute('data-url');
+            
+            if (!deleteUrl) {
+                console.error('Delete URL not found');
+                return;
+            }
+            
+            if (confirm(`Are you sure you want to delete ${itemName}? This action cannot be undone.`)) {
+                // Use fetch API for AJAX deletion
+                fetch(deleteUrl, {
+                    method: 'GET', // Change to POST if your API expects POST
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // If redirect URL is provided, go there
+                        if (data.data && data.data.redirect) {
+                            window.location.href = data.data.redirect;
+                        } else {
+                            // Otherwise reload the page
+                            window.location.reload();
+                        }
+                    } else {
+                        alert('Error: ' + (data.message || 'Failed to delete item'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred. Please try again.');
+                });
+            }
+        });
+    });
+});

@@ -1,9 +1,17 @@
+<?php
+/**
+ * Updated Footer Template with Delete Fix
+ */
+?>
 </div><!-- .content -->
         </main><!-- .main-content -->
     </div><!-- .app-container -->
     
     <!-- Main JS -->
     <script src="/assets/js/main.js"></script>
+    
+    <!-- Delete functionality fix -->
+    <script src="/assets/js/delete-fix.js"></script>
     
     <?php if ($current_dir === 'dashboard' || $current_page === 'index.php'): ?>
     <script>

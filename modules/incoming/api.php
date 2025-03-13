@@ -321,7 +321,7 @@ function deleteTransaction() {
         jsonResponse(false, 'Transaction ID is required');
     }
     
-    $id = $_GET['id'];
+    $id = (int)$_GET['id'];
     
     try {
         // Get transaction
@@ -346,7 +346,7 @@ function deleteTransaction() {
             
             // Update parent transaction's amount
             $stmt = $pdo->prepare("
-                SELECT SUM(amount) as total
+                SELECT COALESCE(SUM(amount), 0) as total
                 FROM incoming
                 WHERE parent_id = :parent_id
             ");
@@ -354,8 +354,8 @@ function deleteTransaction() {
             $result = $stmt->fetch();
             
             if ($result) {
-                // If no splits left, update is_split flag
-                if ($result['total'] === null) {
+                // If no splits left or sum is zero, update is_split flag
+                if ($result['total'] == 0) {
                     $stmt = $pdo->prepare("
                         UPDATE incoming
                         SET is_split = 0
@@ -377,8 +377,8 @@ function deleteTransaction() {
             }
         } else {
             // Delete main transaction and its splits
-            $stmt = $pdo->prepare("DELETE FROM incoming WHERE id = :id OR parent_id = :id");
-            $stmt->execute(['id' => $id]);
+            $stmt = $pdo->prepare("DELETE FROM incoming WHERE id = :id OR parent_id = :parent_id");
+            $stmt->execute(['id' => $id, 'parent_id' => $id]);
         }
         
         // Commit transaction

@@ -696,7 +696,7 @@ function deleteTransaction() {
         jsonResponse(false, 'Transaction ID is required');
     }
     
-    $id = $_GET['id'];
+    $id = (int)$_GET['id'];
     
     try {
         // Get transaction
@@ -765,96 +765,94 @@ function deleteTransaction() {
             
             // Update parent transaction amount
             $stmt = $pdo->prepare("
-                SELECT SUM(amount) as total
+                SELECT COALESCE(SUM(amount), 0) as total
                 FROM outgoing
                 WHERE parent_id = :parent_id
             ");
             $stmt->execute(['parent_id' => $transaction['parent_id']]);
             $result = $stmt->fetch();
             
-            if ($result) {
-                // If no splits left, update is_split flag
-                if ($result['total'] === null) {
+            // If no splits left or sum is zero, update is_split flag
+            if ($result['total'] == 0) {
+                $stmt = $pdo->prepare("
+                    UPDATE outgoing
+                    SET is_split = 0
+                    WHERE id = :id
+                ");
+                $stmt->execute(['id' => $transaction['parent_id']]);
+            } else {
+                // Update parent amount
+                $stmt = $pdo->prepare("
+                    UPDATE outgoing
+                    SET amount = :amount
+                    WHERE id = :id
+                ");
+                $stmt->execute([
+                    'amount' => $result['total'],
+                    'id' => $transaction['parent_id']
+                ]);
+                
+                // If parent is a debt payment, update debt_payments and debt
+                $stmt = $pdo->prepare("
+                    SELECT * FROM outgoing
+                    WHERE id = :id
+                ");
+                $stmt->execute(['id' => $transaction['parent_id']]);
+                $parentTx = $stmt->fetch();
+                
+                if ($parentTx && $parentTx['is_debt']) {
+                    // Get debt payment
                     $stmt = $pdo->prepare("
-                        UPDATE outgoing
-                        SET is_split = 0
-                        WHERE id = :id
+                        SELECT * FROM debt_payments
+                        WHERE outgoing_id = :outgoing_id
                     ");
-                    $stmt->execute(['id' => $transaction['parent_id']]);
-                } else {
-                    // Update parent amount
-                    $stmt = $pdo->prepare("
-                        UPDATE outgoing
-                        SET amount = :amount
-                        WHERE id = :id
-                    ");
-                    $stmt->execute([
-                        'amount' => $result['total'],
-                        'id' => $transaction['parent_id']
-                    ]);
+                    $stmt->execute(['outgoing_id' => $transaction['parent_id']]);
+                    $debtPayment = $stmt->fetch();
                     
-                    // If parent is a debt payment, update debt_payments and debt
-                    $stmt = $pdo->prepare("
-                        SELECT * FROM outgoing
-                        WHERE id = :id
-                    ");
-                    $stmt->execute(['id' => $transaction['parent_id']]);
-                    $parentTx = $stmt->fetch();
-                    
-                    if ($parentTx && $parentTx['is_debt']) {
-                        // Get debt payment
+                    if ($debtPayment) {
+                        // Calculate payment difference
+                        $paymentDiff = $result['total'] - $debtPayment['amount'];
+                        
+                        // Update debt payment amount
                         $stmt = $pdo->prepare("
-                            SELECT * FROM debt_payments
+                            UPDATE debt_payments
+                            SET amount = :amount
                             WHERE outgoing_id = :outgoing_id
                         ");
-                        $stmt->execute(['outgoing_id' => $transaction['parent_id']]);
-                        $debtPayment = $stmt->fetch();
+                        $stmt->execute([
+                            'amount' => $result['total'],
+                            'outgoing_id' => $transaction['parent_id']
+                        ]);
                         
-                        if ($debtPayment) {
-                            // Calculate payment difference
-                            $paymentDiff = $result['total'] - $debtPayment['amount'];
+                        // Get debt
+                        $stmt = $pdo->prepare("
+                            SELECT * FROM debt
+                            WHERE id = :id
+                        ");
+                        $stmt->execute(['id' => $debtPayment['debt_id']]);
+                        $debt = $stmt->fetch();
+                        
+                        if ($debt) {
+                            // Update debt remaining
+                            $remaining = max(0, $debt['remaining_amount'] - $paymentDiff);
                             
-                            // Update debt payment amount
                             $stmt = $pdo->prepare("
-                                UPDATE debt_payments
-                                SET amount = :amount
-                                WHERE outgoing_id = :outgoing_id
-                            ");
-                            $stmt->execute([
-                                'amount' => $result['total'],
-                                'outgoing_id' => $transaction['parent_id']
-                            ]);
-                            
-                            // Get debt
-                            $stmt = $pdo->prepare("
-                                SELECT * FROM debt
+                                UPDATE debt
+                                SET remaining_amount = :remaining_amount
                                 WHERE id = :id
                             ");
-                            $stmt->execute(['id' => $debtPayment['debt_id']]);
-                            $debt = $stmt->fetch();
-                            
-                            if ($debt) {
-                                // Update debt remaining
-                                $remaining = max(0, $debt['remaining_amount'] - $paymentDiff);
-                                
-                                $stmt = $pdo->prepare("
-                                    UPDATE debt
-                                    SET remaining_amount = :remaining_amount
-                                    WHERE id = :id
-                                ");
-                                $stmt->execute([
-                                    'remaining_amount' => $remaining,
-                                    'id' => $debt['id']
-                                ]);
-                            }
+                            $stmt->execute([
+                                'remaining_amount' => $remaining,
+                                'id' => $debt['id']
+                            ]);
                         }
                     }
                 }
             }
         } else {
             // Delete main transaction and its splits
-            $stmt = $pdo->prepare("DELETE FROM outgoing WHERE id = :id OR parent_id = :id");
-            $stmt->execute(['id' => $id]);
+            $stmt = $pdo->prepare("DELETE FROM outgoing WHERE id = :id OR parent_id = :parent_id");
+            $stmt->execute(['id' => $id, 'parent_id' => $id]);
         }
         
         // Commit transaction
@@ -870,7 +868,7 @@ function deleteTransaction() {
             header('Location: index.php' . ($is_debt ? '?is_debt=1' : ''));
             exit;
         }
-    } catch (Exception $e) {
+    } catch (PDOException $e) {
         // Rollback transaction
         $pdo->rollBack();
         

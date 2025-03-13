@@ -1,60 +1,98 @@
+<?php
 /**
- * Delete Functionality Fix
- * This script fixes deletion across all modules
+ * Fixed Delete Transaction Function Template
+ * 
+ * This is a template for the deleteTransaction function 
+ * that should be implemented in all API files.
  */
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Find all delete buttons across the application
-    const deleteButtons = document.querySelectorAll('.delete-btn, [data-action="delete"]');
+/**
+ * Delete transaction
+ */
+function deleteTransaction() {
+    global $pdo;
     
-    deleteButtons.forEach(button => {
-        // Remove any existing event listeners to avoid duplicates
-        button.replaceWith(button.cloneNode(true));
+    // Check if ID is provided
+    if (!isset($_GET['id']) || empty($_GET['id'])) {
+        if (isAjaxRequest()) {
+            jsonResponse(false, 'Transaction ID is required');
+        } else {
+            die('Error: Transaction ID is required');
+        }
+    }
+    
+    $id = (int)$_GET['id'];
+    
+    try {
+        // Begin transaction
+        $pdo->beginTransaction();
         
-        // Get the fresh reference after cloning
-        const newButton = button.parentNode.lastChild;
+        // Get transaction first to verify it exists
+        $stmt = $pdo->prepare("SELECT * FROM yourTableName WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $transaction = $stmt->fetch();
         
-        // Add click event listener
-        newButton.addEventListener('click', function(event) {
-            // Prevent the default link behavior
-            event.preventDefault();
-            
-            // Get the item name for confirmation message
-            const itemName = this.getAttribute('data-name') || 'this item';
-            
-            // Ask for confirmation
-            if (confirm(`Are you sure you want to delete ${itemName}? This action cannot be undone.`)) {
-                // Get the delete URL
-                const deleteUrl = this.getAttribute('href');
-                
-                // If no URL, show error
-                if (!deleteUrl) {
-                    alert('Error: Delete URL not found.');
-                    return;
-                }
-                
-                // Create a form to submit the delete request as POST
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = deleteUrl;
-                form.style.display = 'none';
-                
-                // Add CSRF token if exists
-                const csrfToken = document.querySelector('meta[name="csrf-token"]');
-                if (csrfToken) {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'csrf_token';
-                    input.value = csrfToken.getAttribute('content');
-                    form.appendChild(input);
-                }
-                
-                // Add to document and submit
-                document.body.appendChild(form);
-                form.submit();
+        if (!$transaction) {
+            $pdo->rollBack();
+            if (isAjaxRequest()) {
+                jsonResponse(false, 'Transaction not found');
+            } else {
+                die('Error: Transaction not found');
             }
-        });
-    });
-    
-    console.log('Delete functionality enhanced for', deleteButtons.length, 'buttons');
-});
+        }
+        
+        // Check if this is a split transaction with child items
+        if (isset($transaction['is_split']) && $transaction['is_split']) {
+            // Delete child items first
+            $stmt = $pdo->prepare("DELETE FROM yourTableName WHERE parent_id = :parent_id");
+            $stmt->execute(['parent_id' => $id]);
+        }
+        
+        // Delete main transaction
+        $stmt = $pdo->prepare("DELETE FROM yourTableName WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        
+        // Commit transaction
+        $pdo->commit();
+        
+        // Handle response
+        if (isAjaxRequest()) {
+            jsonResponse(true, 'Transaction deleted successfully', ['redirect' => 'index.php']);
+        } else {
+            // Redirect with success message
+            header('Location: index.php?message=Transaction+deleted+successfully');
+            exit;
+        }
+    } catch (Exception $e) {
+        // Rollback transaction
+        $pdo->rollBack();
+        
+        // Handle error
+        if (isAjaxRequest()) {
+            jsonResponse(false, 'Error deleting transaction: ' . $e->getMessage());
+        } else {
+            die('Error deleting transaction: ' . $e->getMessage());
+        }
+    }
+}
+
+/**
+ * Check if request is AJAX
+ */
+function isAjaxRequest() {
+    return !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+           strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+}
+
+/**
+ * Send JSON response
+ */
+function jsonResponse($success, $message, $data = []) {
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => $success,
+        'message' => $message,
+        'data' => $data
+    ]);
+    exit;
+}

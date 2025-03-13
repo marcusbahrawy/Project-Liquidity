@@ -274,7 +274,7 @@ function deleteDebt() {
         jsonResponse(false, 'Debt ID is required');
     }
     
-    $id = $_GET['id'];
+    $id = (int)$_GET['id'];
     
     try {
         // Get debt
@@ -305,14 +305,11 @@ function deleteDebt() {
             $stmt = $pdo->prepare("DELETE FROM debt_payments WHERE debt_id = :debt_id");
             $stmt->execute(['debt_id' => $id]);
             
-            // Then delete outgoing transactions
-            $outgoingIds = array_map(function($payment) {
-                return $payment['outgoing_id'];
-            }, $payments);
-            
-            $placeholders = str_repeat('?,', count($outgoingIds) - 1) . '?';
-            $stmt = $pdo->prepare("DELETE FROM outgoing WHERE id IN ({$placeholders})");
-            $stmt->execute(array_values($outgoingIds));
+            // Then delete outgoing transactions (one by one to avoid parameter errors)
+            foreach ($payments as $payment) {
+                $stmt = $pdo->prepare("DELETE FROM outgoing WHERE id = :id");
+                $stmt->execute(['id' => $payment['outgoing_id']]);
+            }
         }
         
         // Delete debt
