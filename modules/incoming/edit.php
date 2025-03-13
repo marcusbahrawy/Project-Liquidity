@@ -137,7 +137,7 @@ require_once '../../includes/header.php';
             <?php if (!$isSplitItem && !$isSplit): ?>
                 <div class="form-divider">
                     <h3>Split Transaction (Optional)</h3>
-                    <p class="text-muted">If you want to split this transaction into multiple categories, add the splits below.</p>
+                    <p class="text-muted">If you want to split this transaction into multiple parts, add the splits below.</p>
                 </div>
                 
                 <div id="splits-container">
@@ -166,48 +166,16 @@ require_once '../../includes/header.php';
                             </div>
                             
                             <div class="form-row">
-                                <div class="form-group col-md-6">
-                                    <label>Description</label>
-                                    <p class="form-control-static"><?php echo htmlspecialchars($split['description']); ?></p>
-                                </div>
-                                
                                 <div class="form-group col-md-3">
                                     <label>Amount</label>
                                     <p class="form-control-static"><?php echo number_format($split['amount'], 2); ?> kr</p>
                                 </div>
                                 
                                 <div class="form-group col-md-3">
-                                    <label>Category</label>
-                                    <p class="form-control-static">
-                                        <?php
-                                        if ($split['category_id']) {
-                                            foreach ($categories as $category) {
-                                                if ($category['id'] == $split['category_id']) {
-                                                    echo htmlspecialchars($category['name']);
-                                                    break;
-                                                }
-                                            }
-                                        } else {
-                                            echo '<span class="text-muted">Uncategorized</span>';
-                                        }
-                                        ?>
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <div class="form-row">
-                                <div class="form-group col-md-3">
                                     <label>Date</label>
                                     <p class="form-control-static"><?php echo date('M d, Y', strtotime($split['date'])); ?></p>
                                 </div>
                             </div>
-                            
-                            <?php if ($split['notes']): ?>
-                                <div class="form-group">
-                                    <label>Notes</label>
-                                    <p class="form-control-static"><?php echo nl2br(htmlspecialchars($split['notes'])); ?></p>
-                                </div>
-                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -280,31 +248,9 @@ document.addEventListener('DOMContentLoaded', function() {
         splitItem.dataset.id = splitCounter;
         splitItem.innerHTML = `
             <div class="form-row">
-                <div class="form-group col-md-4">
-                    <label for="split_description_${splitCounter}">Split Description</label>
-                    <input type="text" id="split_description_${splitCounter}" name="splits[${splitCounter}][description]" class="form-control">
-                </div>
-                
                 <div class="form-group col-md-3">
                     <label for="split_amount_${splitCounter}">Amount (kr)</label>
                     <input type="number" id="split_amount_${splitCounter}" name="splits[${splitCounter}][amount]" class="form-control split-amount" step="0.01" min="0.01">
-                </div>
-                
-                <div class="form-group col-md-4">
-                    <label for="split_category_${splitCounter}">Category</label>
-                    <select id="split_category_${splitCounter}" name="splits[${splitCounter}][category_id]" class="form-select">
-                        <option value="">-- Select Category --</option>
-                        ${Array.from(document.getElementById('category_id').options)
-                            .map(opt => opt.value ? `<option value="${opt.value}" data-color="${opt.dataset.color}">${opt.text}</option>` : '')
-                            .join('')}
-                    </select>
-                </div>
-                
-                <div class="form-group col-md-1">
-                    <label>&nbsp;</label>
-                    <button type="button" class="btn btn-danger form-control remove-split" data-id="${splitCounter}">
-                        <i class="fas fa-trash"></i>
-                    </button>
                 </div>
             </div>
             
@@ -315,10 +261,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
             
-            <div class="form-group">
-                <label for="split_notes_${splitCounter}">Notes</label>
-                <textarea id="split_notes_${splitCounter}" name="splits[${splitCounter}][notes]" class="form-control" rows="2"></textarea>
+            <div class="form-row">
+                <div class="form-group col-md-2">
+                    <button type="button" class="btn btn-danger form-control remove-split" data-id="${splitCounter}">
+                        <i class="fas fa-trash"></i> Delete Split
+                    </button>
+                </div>
             </div>
+            
+            <!-- Hidden fields with default values to maintain API compatibility -->
+            <input type="hidden" name="splits[${splitCounter}][description]" value="Split ${splitCounter}">
+            <input type="hidden" name="splits[${splitCounter}][category_id]" value="">
+            <input type="hidden" name="splits[${splitCounter}][notes]" value="">
             
             <div class="split-divider"></div>
         `;

@@ -1,6 +1,6 @@
 <?php
 /**
- * Outgoing Transactions View - Simplified
+ * Outgoing Transactions View - Simplified with Date for Splits
  */
 
 // Include database connection
@@ -284,7 +284,7 @@ require_once '../../includes/header.php';
                             
                             <?php foreach ($splits as $split): ?>
                                 <tr class="split-row">
-                                    <td></td>
+                                    <td><?php echo date('M d, Y', strtotime($split['date'])); ?></td>
                                     <td class="split-item">
                                         <i class="fas fa-level-down-alt"></i>
                                         <?php echo htmlspecialchars($split['description']); ?>

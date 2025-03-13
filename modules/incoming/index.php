@@ -1,6 +1,6 @@
 <?php
 /**
- * Incoming Transactions View - Simplified with Robust Search Fix
+ * Incoming Transactions View - Simplified with Robust Search Fix and Split Date Display
  */
 
 // Include database connection
@@ -127,7 +127,7 @@ require_once '../../includes/header.php';
             <thead>
                 <tr>
                     <th>
-                        <a href="?sort=date&order=<?php echo ($sort === 'date' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
+                        <a href="?sort=date&order=<?php echo ($sort === 'date' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['type', 'search']); ?>">
                             Date
                             <?php if ($sort === 'date'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -135,7 +135,7 @@ require_once '../../includes/header.php';
                         </a>
                     </th>
                     <th>
-                        <a href="?sort=description&order=<?php echo ($sort === 'description' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
+                        <a href="?sort=description&order=<?php echo ($sort === 'description' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['type', 'search']); ?>">
                             Description
                             <?php if ($sort === 'description'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -144,7 +144,7 @@ require_once '../../includes/header.php';
                     </th>
                     <th>Category</th>
                     <th>
-                        <a href="?sort=amount&order=<?php echo ($sort === 'amount' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
+                        <a href="?sort=amount&order=<?php echo ($sort === 'amount' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['type', 'search']); ?>">
                             Amount
                             <?php if ($sort === 'amount'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -225,7 +225,7 @@ require_once '../../includes/header.php';
                             
                             <?php foreach ($splits as $split): ?>
                                 <tr class="split-row">
-                                    <td></td>
+                                    <td><?php echo date('M d, Y', strtotime($split['date'])); ?></td>
                                     <td class="split-item">
                                         <i class="fas fa-level-down-alt"></i>
                                         <?php echo htmlspecialchars($split['description']); ?>
