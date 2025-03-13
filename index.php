@@ -310,7 +310,11 @@ require_once 'includes/header.php';
                         <?php if (isset($transaction['splits']) && !empty($transaction['splits'])): ?>
                             <?php foreach ($transaction['splits'] as $split): ?>
                                 <div class="expense-item split-item">
-                                    <div class="expense-date" style="visibility: hidden;"></div>
+                                    <!-- MODIFIED: Show the actual split date instead of hiding it -->
+                                    <div class="expense-date">
+                                        <div class="expense-day"><?php echo date('d', strtotime($split['date'])); ?></div>
+                                        <div class="expense-month"><?php echo date('M', strtotime($split['date'])); ?></div>
+                                    </div>
                                     <div class="expense-details split-details">
                                         <div class="expense-title">
                                             <i class="fas fa-level-down-alt"></i>
@@ -528,9 +532,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add split items if any
             if (transaction.splits && transaction.splits.length > 0) {
                 transaction.splits.forEach(split => {
+                    // MODIFIED: Create a separate date display for the split item
+                    const splitDate = new Date(split.date);
+                    const splitDay = splitDate.getDate().toString().padStart(2, '0');
+                    const splitMonth = splitDate.toLocaleString('default', { month: 'short' });
+                    
                     container.innerHTML += `
                         <div class="expense-item split-item">
-                            <div class="expense-date" style="visibility: hidden;"></div>
+                            <!-- MODIFIED: Show the actual split date instead of hiding it -->
+                            <div class="expense-date">
+                                <div class="expense-day">${splitDay}</div>
+                                <div class="expense-month">${splitMonth}</div>
+                            </div>
                             <div class="expense-details split-details">
                                 <div class="expense-title">
                                     <i class="fas fa-level-down-alt"></i>
