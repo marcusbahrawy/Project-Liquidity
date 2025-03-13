@@ -3,6 +3,7 @@
  * Dashboard API
  * 
  * Provides data for the dashboard charts and widgets with improved recurring transaction handling
+ * and proper split transaction support
  */
 
 // Include database connection
@@ -80,22 +81,21 @@ function getTransactionsData() {
         $currentDate = date('Y-m-d');
         $endDate = date('Y-m-d', strtotime("+$days days"));
         
-        // Get transactions for the selected period
-        // MODIFIED: Include split items and exclude parent transactions
+        // Get transactions for the selected period - fetch parent transactions only
         $stmt = $pdo->prepare("
-            (SELECT 'incoming' as type, i.id, i.description, i.amount, i.date, c.name as category, c.color
+            (SELECT 'incoming' as type, i.id, i.description, i.amount, i.date, i.is_split, c.name as category, c.color
              FROM incoming i
              LEFT JOIN categories c ON i.category_id = c.id
              WHERE i.date BETWEEN :current_date_inc AND :end_date_inc 
-             AND (i.parent_id IS NOT NULL OR (i.parent_id IS NULL AND i.is_split = 0))
+             AND i.parent_id IS NULL
              ORDER BY i.date ASC
              LIMIT 40)
             UNION ALL
-            (SELECT 'outgoing' as type, o.id, o.description, o.amount, o.date, c.name as category, c.color
+            (SELECT 'outgoing' as type, o.id, o.description, o.amount, o.date, o.is_split, c.name as category, c.color
              FROM outgoing o
              LEFT JOIN categories c ON o.category_id = c.id
              WHERE o.date BETWEEN :current_date_out AND :end_date_out 
-             AND (o.parent_id IS NOT NULL OR (o.parent_id IS NULL AND o.is_split = 0))
+             AND o.parent_id IS NULL
              ORDER BY o.date ASC
              LIMIT 40)
             ORDER BY date ASC
@@ -108,6 +108,47 @@ function getTransactionsData() {
             'end_date_out' => $endDate
         ]);
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Process transactions to include split items
+        $organizedTransactions = [];
+        
+        foreach ($transactions as $transaction) {
+            // Add the transaction to our organized list
+            $organizedTransaction = $transaction;
+            
+            // If it's a split transaction, fetch its split items
+            if ($transaction['is_split']) {
+                $splits = [];
+                
+                if ($transaction['type'] === 'incoming') {
+                    // Fetch incoming split items
+                    $splitStmt = $pdo->prepare("
+                        SELECT i.id, i.description, i.amount, i.date, c.name as category, c.color
+                        FROM incoming i
+                        LEFT JOIN categories c ON i.category_id = c.id
+                        WHERE i.parent_id = :parent_id
+                        ORDER BY i.amount DESC
+                    ");
+                    $splitStmt->execute(['parent_id' => $transaction['id']]);
+                    $splits = $splitStmt->fetchAll(PDO::FETCH_ASSOC);
+                } else {
+                    // Fetch outgoing split items
+                    $splitStmt = $pdo->prepare("
+                        SELECT o.id, o.description, o.amount, o.date, c.name as category, c.color
+                        FROM outgoing o
+                        LEFT JOIN categories c ON o.category_id = c.id
+                        WHERE o.parent_id = :parent_id
+                        ORDER BY o.amount DESC
+                    ");
+                    $splitStmt->execute(['parent_id' => $transaction['id']]);
+                    $splits = $splitStmt->fetchAll(PDO::FETCH_ASSOC);
+                }
+                
+                $organizedTransaction['splits'] = $splits;
+            }
+            
+            $organizedTransactions[] = $organizedTransaction;
+        }
         
         // Get category spending breakdown
         $stmt = $pdo->prepare("
@@ -186,7 +227,7 @@ function getTransactionsData() {
         
         // Return combined data
         jsonResponse(true, 'Transactions data retrieved successfully', [
-            'transactions' => $transactions,
+            'transactions' => $organizedTransactions,
             'categories' => $categories,
             'stats' => $stats
         ]);
