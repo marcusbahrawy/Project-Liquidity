@@ -979,7 +979,7 @@ function getDashboardStats() {
         $upcomingIncomeRecurring = 0;
         $endDate = date('Y-m-d', strtotime('+30 days'));
         
-        // For recurring transactions, we only count non-split parent transactions
+        // For recurring transactions, we only count non-split parent transactions by default
         $stmt = $pdo->prepare("
             SELECT id, description, amount, date, repeat_interval, repeat_until, is_split
             FROM incoming 
@@ -992,14 +992,81 @@ function getDashboardStats() {
         $recurringIncome = $stmt->fetchAll();
         
         foreach ($recurringIncome as $income) {
-            // Skip if it's a split parent - we'll handle split children separately
-            if ($income['is_split'] == 1) {
-                continue;
-            }
-            
             $startDate = $income['date'];
             $endDateForIncome = $income['repeat_until'] ? min($income['repeat_until'], $endDate) : $endDate;
             $interval = $income['repeat_interval'];
+            
+            // When we find a recurring split parent transaction
+            if ($income['is_split'] == 1) {
+                // Fetch the split children
+                $splitStmt = $pdo->prepare("
+                    SELECT amount 
+                    FROM incoming 
+                    WHERE parent_id = :parent_id
+                ");
+                $splitStmt->execute(['parent_id' => $income['id']]);
+                $splitItems = $splitStmt->fetchAll();
+                
+                // Calculate occurrences for each child
+                $date = new DateTime($startDate);
+                $endDateObj = new DateTime($endDateForIncome);
+                $currentDateObj = new DateTime($currentDate);
+                
+                // If start date is in the past, begin from first occurrence after current date
+                if ($date < $currentDateObj) {
+                    // Advance to first occurrence on or after current date
+                    while ($date < $currentDateObj) {
+                        switch ($interval) {
+                            case 'daily':
+                                $date->modify('+1 day');
+                                break;
+                            case 'weekly':
+                                $date->modify('+1 week');
+                                break;
+                            case 'monthly':
+                                $date->modify('+1 month');
+                                break;
+                            case 'quarterly':
+                                $date->modify('+3 months');
+                                break;
+                            case 'yearly':
+                                $date->modify('+1 year');
+                                break;
+                        }
+                    }
+                }
+                
+                // Now add all occurrences within our range
+                while ($date <= $endDateObj) {
+                    foreach ($splitItems as $splitItem) {
+                        $upcomingIncomeRecurring += (float)$splitItem['amount'];
+                    }
+                    
+                    // Advance to next occurrence
+                    switch ($interval) {
+                        case 'daily':
+                            $date->modify('+1 day');
+                            break;
+                        case 'weekly':
+                            $date->modify('+1 week');
+                            break;
+                        case 'monthly':
+                            $date->modify('+1 month');
+                            break;
+                        case 'quarterly':
+                            $date->modify('+3 months');
+                            break;
+                        case 'yearly':
+                            $date->modify('+1 year');
+                            break;
+                    }
+                }
+                
+                // Skip the rest of the loop for this parent transaction
+                continue;
+            }
+            
+            // For non-split recurring transactions, continue as before
             $amount = (float)$income['amount'];
             
             // Calculate occurrences using DateTime
@@ -1078,7 +1145,7 @@ function getDashboardStats() {
         $upcomingExpenseRecurring = 0;
         $endDate = date('Y-m-d', strtotime('+30 days'));
         
-        // For recurring transactions, we only count non-split parent transactions
+        // For recurring transactions, we only count non-split parent transactions by default
         $stmt = $pdo->prepare("
             SELECT id, description, amount, date, repeat_interval, repeat_until, is_split
             FROM outgoing 
@@ -1091,14 +1158,81 @@ function getDashboardStats() {
         $recurringExpenses = $stmt->fetchAll();
         
         foreach ($recurringExpenses as $expense) {
-            // Skip if it's a split parent - we'll handle split children separately
-            if ($expense['is_split'] == 1) {
-                continue;
-            }
-            
             $startDate = $expense['date'];
             $endDateForExpense = $expense['repeat_until'] ? min($expense['repeat_until'], $endDate) : $endDate;
             $interval = $expense['repeat_interval'];
+            
+            // When we find a recurring split parent transaction
+            if ($expense['is_split'] == 1) {
+                // Fetch the split children
+                $splitStmt = $pdo->prepare("
+                    SELECT amount 
+                    FROM outgoing 
+                    WHERE parent_id = :parent_id
+                ");
+                $splitStmt->execute(['parent_id' => $expense['id']]);
+                $splitItems = $splitStmt->fetchAll();
+                
+                // Calculate occurrences for each child
+                $date = new DateTime($startDate);
+                $endDateObj = new DateTime($endDateForExpense);
+                $currentDateObj = new DateTime($currentDate);
+                
+                // If start date is in the past, begin from first occurrence after current date
+                if ($date < $currentDateObj) {
+                    // Advance to first occurrence on or after current date
+                    while ($date < $currentDateObj) {
+                        switch ($interval) {
+                            case 'daily':
+                                $date->modify('+1 day');
+                                break;
+                            case 'weekly':
+                                $date->modify('+1 week');
+                                break;
+                            case 'monthly':
+                                $date->modify('+1 month');
+                                break;
+                            case 'quarterly':
+                                $date->modify('+3 months');
+                                break;
+                            case 'yearly':
+                                $date->modify('+1 year');
+                                break;
+                        }
+                    }
+                }
+                
+                // Now add all occurrences within our range
+                while ($date <= $endDateObj) {
+                    foreach ($splitItems as $splitItem) {
+                        $upcomingExpenseRecurring += (float)$splitItem['amount'];
+                    }
+                    
+                    // Advance to next occurrence
+                    switch ($interval) {
+                        case 'daily':
+                            $date->modify('+1 day');
+                            break;
+                        case 'weekly':
+                            $date->modify('+1 week');
+                            break;
+                        case 'monthly':
+                            $date->modify('+1 month');
+                            break;
+                        case 'quarterly':
+                            $date->modify('+3 months');
+                            break;
+                        case 'yearly':
+                            $date->modify('+1 year');
+                            break;
+                    }
+                }
+                
+                // Skip the rest of the loop for this parent transaction
+                continue;
+            }
+            
+            // For non-split recurring transactions, continue as before
             $amount = (float)$expense['amount'];
             
             // Calculate occurrences using DateTime
