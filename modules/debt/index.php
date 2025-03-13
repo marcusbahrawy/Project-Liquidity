@@ -1,6 +1,6 @@
 <?php
 /**
- * Debt Management View
+ * Debt Management View - Simplified
  */
 
 // Include database connection
@@ -9,59 +9,55 @@ require_once '../../config/database.php';
 // Include helper functions
 require_once '../../includes/functions.php';
 
-// Get filter parameters
-$category_id = isset($_GET['category']) ? (int)$_GET['category'] : null;
+// Get filter parameters - keeping only search, sort and order
 $search = isset($_GET['search']) ? trim($_GET['search']) : null;
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'remaining_amount';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
 
-// Build the query
-$query = "
-    SELECT d.*, c.name as category_name, c.color as category_color
-    FROM debt d
-    LEFT JOIN categories c ON d.category_id = c.id
-    WHERE 1=1
-";
-
-$params = [];
-
-// Apply filters
-if ($category_id) {
-    $query .= " AND d.category_id = :category_id";
-    $params['category_id'] = $category_id;
-}
-
-if ($search) {
-    $query .= " AND (d.description LIKE :search OR d.notes LIKE :search)";
-    $params['search'] = "%{$search}%";
-}
-
-// Apply sorting
-$query .= " ORDER BY d.{$sort} {$order}";
-
-// Get debts
-$stmt = $pdo->prepare($query);
-$stmt->execute($params);
-$debts = $stmt->fetchAll();
-
-// Get categories for filter dropdown
-$stmt = $pdo->prepare("
-    SELECT * FROM categories
-    WHERE type IN ('outgoing', 'both')
-    ORDER BY name ASC
-");
-$stmt->execute();
-$categories = $stmt->fetchAll();
-
-// Calculate totals
+// Initialize debts array
+$debts = [];
 $total_debt = 0;
 $total_remaining = 0;
-$total_paid = 0;
 
-foreach ($debts as $debt) {
-    $total_debt += $debt['total_amount'];
-    $total_remaining += $debt['remaining_amount'];
+// Build the query based on whether we're searching or not
+if (!empty($search)) {
+    // Query with search (using positional parameters)
+    $query = "
+        SELECT d.*, c.name as category_name, c.color as category_color
+        FROM debt d
+        LEFT JOIN categories c ON d.category_id = c.id
+        WHERE (d.description LIKE ? OR d.notes LIKE ?)
+        ORDER BY d.{$sort} {$order}
+    ";
+    
+    // Execute with positional parameters
+    $stmt = $pdo->prepare($query);
+    $searchParam = "%{$search}%";
+    $stmt->execute([$searchParam, $searchParam]);
+    $debts = $stmt->fetchAll();
+} else {
+    // Query without search
+    $query = "
+        SELECT d.*, c.name as category_name, c.color as category_color
+        FROM debt d
+        LEFT JOIN categories c ON d.category_id = c.id
+        ORDER BY d.{$sort} {$order}
+    ";
+    
+    // Execute without parameters
+    $stmt = $pdo->prepare($query);
+    $stmt->execute();
+    $debts = $stmt->fetchAll();
 }
+
+// Calculate totals
+if (!empty($debts)) {
+    foreach ($debts as $debt) {
+        $total_debt += $debt['total_amount'];
+        $total_remaining += $debt['remaining_amount'];
+    }
+}
+
 $total_paid = $total_debt - $total_remaining;
 
 // Include header
@@ -85,67 +81,30 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<!-- Filters -->
+<!-- Simplified Filters - Only Search -->
 <div class="card mb-4">
     <div class="card-body">
         <form id="filters-form" class="filters-form" method="GET">
             <div class="form-row">
-                <div class="form-group col-md-6">
-                    <label for="category">Category</label>
-                    <select id="category" name="category" class="form-select">
-                        <option value="">All Categories</option>
-                        <?php foreach ($categories as $category): ?>
-                            <option value="<?php echo $category['id']; ?>" <?php echo ($category_id == $category['id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($category['name']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div class="form-group col-md-6">
+                <div class="form-group col-md-12">
                     <label for="search">Search</label>
-                    <input type="text" id="search" name="search" class="form-control" placeholder="Search description or notes..." value="<?php echo htmlspecialchars($search ?? ''); ?>">
+                    <div class="search-container">
+                        <input type="text" id="search" name="search" class="form-control" placeholder="Search description or notes..." value="<?php echo htmlspecialchars($search ?? ''); ?>">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                        <?php if ($search): ?>
+                            <a href="index.php" class="btn btn-light">
+                                <i class="fas fa-times"></i> Clear
+                            </a>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
             
-            <div class="filters-actions">
-                <input type="hidden" name="sort" value="<?php echo htmlspecialchars($sort); ?>">
-                <input type="hidden" name="order" value="<?php echo htmlspecialchars($order); ?>">
-                
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <i class="fas fa-filter"></i> Apply Filters
-                </button>
-                
-                <a href="index.php" class="btn btn-light btn-sm">
-                    <i class="fas fa-times"></i> Clear Filters
-                </a>
-            </div>
+            <input type="hidden" name="sort" value="<?php echo htmlspecialchars($sort); ?>">
+            <input type="hidden" name="order" value="<?php echo htmlspecialchars($order); ?>">
         </form>
-    </div>
-</div>
-
-<!-- Summary & Stats -->
-<div class="stats-row mb-4">
-    <div class="stat-card">
-        <div class="stat-value"><?php echo number_format($total_debt, 2); ?> kr</div>
-        <div class="stat-label">Total Debt</div>
-    </div>
-    
-    <div class="stat-card">
-        <div class="stat-value"><?php echo number_format($total_remaining, 2); ?> kr</div>
-        <div class="stat-label">Remaining Balance</div>
-        <div class="stat-percent"><?php echo $total_debt > 0 ? round(($total_remaining / $total_debt) * 100) : 0; ?>%</div>
-    </div>
-    
-    <div class="stat-card">
-        <div class="stat-value"><?php echo number_format($total_paid, 2); ?> kr</div>
-        <div class="stat-label">Total Paid</div>
-        <div class="stat-percent"><?php echo $total_debt > 0 ? round(($total_paid / $total_debt) * 100) : 0; ?>%</div>
-    </div>
-    
-    <div class="stat-card">
-        <div class="stat-value"><?php echo count($debts); ?></div>
-        <div class="stat-label">Active Debts</div>
     </div>
 </div>
 
@@ -159,10 +118,10 @@ require_once '../../includes/header.php';
                     <i class="fas fa-download"></i> Export
                 </button>
                 <div class="dropdown-menu dropdown-menu-right" aria-labelledby="exportDropdown">
-                    <a class="dropdown-item" href="api.php?action=export&format=csv<?php echo buildQueryParams(['category', 'search']); ?>">
+                    <a class="dropdown-item" href="api.php?action=export&format=csv<?php echo $search ? '&search=' . urlencode($search) : ''; ?>">
                         <i class="fas fa-file-csv"></i> Export as CSV
                     </a>
-                    <a class="dropdown-item" href="api.php?action=export&format=pdf<?php echo buildQueryParams(['category', 'search']); ?>">
+                    <a class="dropdown-item" href="api.php?action=export&format=pdf<?php echo $search ? '&search=' . urlencode($search) : ''; ?>">
                         <i class="fas fa-file-pdf"></i> Export as PDF
                     </a>
                 </div>
@@ -175,7 +134,7 @@ require_once '../../includes/header.php';
             <thead>
                 <tr>
                     <th>
-                        <a href="?sort=description&order=<?php echo ($sort === 'description' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['category', 'search']); ?>">
+                        <a href="?sort=description&order=<?php echo ($sort === 'description' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
                             Description
                             <?php if ($sort === 'description'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -184,7 +143,7 @@ require_once '../../includes/header.php';
                     </th>
                     <th>Category</th>
                     <th>
-                        <a href="?sort=start_date&order=<?php echo ($sort === 'start_date' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['category', 'search']); ?>">
+                        <a href="?sort=start_date&order=<?php echo ($sort === 'start_date' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
                             Start Date
                             <?php if ($sort === 'start_date'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -192,7 +151,7 @@ require_once '../../includes/header.php';
                         </a>
                     </th>
                     <th>
-                        <a href="?sort=total_amount&order=<?php echo ($sort === 'total_amount' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['category', 'search']); ?>">
+                        <a href="?sort=total_amount&order=<?php echo ($sort === 'total_amount' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
                             Total Amount
                             <?php if ($sort === 'total_amount'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -200,7 +159,7 @@ require_once '../../includes/header.php';
                         </a>
                     </th>
                     <th>
-                        <a href="?sort=remaining_amount&order=<?php echo ($sort === 'remaining_amount' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['category', 'search']); ?>">
+                        <a href="?sort=remaining_amount&order=<?php echo ($sort === 'remaining_amount' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
                             Remaining
                             <?php if ($sort === 'remaining_amount'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -209,7 +168,7 @@ require_once '../../includes/header.php';
                     </th>
                     <th>Progress</th>
                     <th>
-                        <a href="?sort=interest_rate&order=<?php echo ($sort === 'interest_rate' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['category', 'search']); ?>">
+                        <a href="?sort=interest_rate&order=<?php echo ($sort === 'interest_rate' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
                             Interest Rate
                             <?php if ($sort === 'interest_rate'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -330,6 +289,15 @@ require_once '../../includes/header.php';
     margin-bottom: 0;
 }
 
+.search-container {
+    display: flex;
+    gap: 10px;
+}
+
+.search-container .form-control {
+    flex-grow: 1;
+}
+
 .form-row {
     display: flex;
     flex-wrap: wrap;
@@ -343,48 +311,9 @@ require_once '../../includes/header.php';
     margin-bottom: 15px;
 }
 
-.col-md-6 {
-    flex: 0 0 50%;
-    max-width: 50%;
-}
-
-.filters-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.stats-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-}
-
-.stat-card {
-    background-color: white;
-    border-radius: var(--border-radius);
-    padding: 20px 25px;
-    box-shadow: var(--card-shadow);
-}
-
-.stat-card .stat-value {
-    font-size: 24px;
-    font-weight: 600;
-    color: var(--dark);
-    margin-bottom: 5px;
-}
-
-.stat-card .stat-label {
-    color: var(--gray);
-    font-size: 14px;
-}
-
-.stat-card .stat-percent {
-    margin-top: 5px;
-    font-size: 13px;
-    font-weight: 500;
+.col-md-12 {
+    flex: 0 0 100%;
+    max-width: 100%;
 }
 
 .category-badge {
@@ -410,6 +339,22 @@ require_once '../../includes/header.php';
 
 .progress-bar {
     background-color: var(--secondary);
+}
+
+.font-weight-bold {
+    font-weight: 600;
+}
+
+.small {
+    font-size: 85%;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
 }
 
 /* Dropdown styles */
@@ -476,14 +421,6 @@ require_once '../../includes/header.php';
     margin-right: 8px;
 }
 
-.font-weight-bold {
-    font-weight: 600;
-}
-
-.small {
-    font-size: 85%;
-}
-
 @media (max-width: 768px) {
     .module-header {
         flex-direction: column;
@@ -492,11 +429,6 @@ require_once '../../includes/header.php';
     
     .module-actions {
         margin-top: 15px;
-    }
-    
-    .col-md-6 {
-        flex: 0 0 100%;
-        max-width: 100%;
     }
 }
 </style>
@@ -523,3 +455,4 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
 // Include footer
 require_once '../../includes/footer.php';
+?>

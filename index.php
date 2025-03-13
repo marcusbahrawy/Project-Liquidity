@@ -1,8 +1,6 @@
 <?php
 /**
- * Main Index File with Future Data
- * 
- * This redirects to the dashboard or serves as the dashboard itself.
+ * Main Index File with Future Data and Dynamic Date Range
  */
 
 // Include database connection
@@ -40,9 +38,13 @@ function getInitialBalance() {
     return 0; // Default to 0 if not found
 }
 
+// Default time range in days
+$timeRange = 30;
+
 // Get summary data for dashboard
 // Get current date
 $currentDate = date('Y-m-d');
+$endDate = date('Y-m-d', strtotime("+{$timeRange} days"));
 
 // Get initial balance
 $initialBalance = getInitialBalance();
@@ -63,7 +65,7 @@ $transactionSum = $result['transaction_sum'] ?? 0;
 // Current balance is initial balance + all transactions
 $balance = $initialBalance + $transactionSum;
 
-// Get upcoming income for the next 30 days
+// Get upcoming income for the next x days
 $stmt = $pdo->prepare("
     SELECT COALESCE(SUM(amount), 0) as total 
     FROM incoming 
@@ -72,12 +74,12 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute([
     'start_date' => $currentDate,
-    'end_date' => date('Y-m-d', strtotime('+30 days'))
+    'end_date' => $endDate
 ]);
 $income = $stmt->fetch();
 $totalIncome = $income['total'] ?? 0;
 
-// Get upcoming expenses for the next 30 days
+// Get upcoming expenses for the next x days
 $stmt = $pdo->prepare("
     SELECT COALESCE(SUM(amount), 0) as total 
     FROM outgoing 
@@ -86,7 +88,7 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute([
     'start_date' => $currentDate,
-    'end_date' => date('Y-m-d', strtotime('+30 days'))
+    'end_date' => $endDate
 ]);
 $expense = $stmt->fetch();
 $totalExpense = $expense['total'] ?? 0;
@@ -108,50 +110,26 @@ $stmt = $pdo->prepare("
     (SELECT 'incoming' as type, i.id, i.description, i.amount, i.date, c.name as category, c.color
      FROM incoming i
      LEFT JOIN categories c ON i.category_id = c.id
-     WHERE i.date >= :current_date_inc AND i.parent_id IS NULL
+     WHERE i.date BETWEEN :current_date_inc AND :end_date_inc AND i.parent_id IS NULL
      ORDER BY i.date ASC
-     LIMIT 5)
+     LIMIT 15)
     UNION ALL
     (SELECT 'outgoing' as type, o.id, o.description, o.amount, o.date, c.name as category, c.color
      FROM outgoing o
      LEFT JOIN categories c ON o.category_id = c.id
-     WHERE o.date >= :current_date_out AND o.parent_id IS NULL AND o.is_debt = 0
+     WHERE o.date BETWEEN :current_date_out AND :end_date_out AND o.parent_id IS NULL
      ORDER BY o.date ASC
-     LIMIT 5)
+     LIMIT 15)
     ORDER BY date ASC
-    LIMIT 10
+    LIMIT 15
 ");
 $stmt->execute([
     'current_date_inc' => $currentDate,
-    'current_date_out' => $currentDate
+    'end_date_inc' => $endDate,
+    'current_date_out' => $currentDate,
+    'end_date_out' => $endDate
 ]);
-$recentTransactions = $stmt->fetchAll();
-
-// Get upcoming expenses specifically
-$stmt = $pdo->prepare("
-    SELECT o.id, o.description, o.amount, o.date, c.name as category, c.color
-    FROM outgoing o
-    LEFT JOIN categories c ON o.category_id = c.id
-    WHERE o.date >= :currentDate AND o.is_debt = 0 AND o.parent_id IS NULL
-    ORDER BY o.date ASC
-    LIMIT 5
-");
-$stmt->execute(['currentDate' => $currentDate]);
-$upcomingExpenses = $stmt->fetchAll();
-
-// Get category spending breakdown for upcoming expenses
-$stmt = $pdo->prepare("
-    SELECT c.id, c.name, c.color, COALESCE(SUM(o.amount), 0) as total
-    FROM categories c
-    JOIN outgoing o ON o.category_id = c.id 
-    WHERE o.date >= :current_date AND o.is_debt = 0 AND o.parent_id IS NULL
-    GROUP BY c.id, c.name, c.color
-    HAVING total > 0
-    ORDER BY total DESC
-    LIMIT 6
-");
-$stmt->execute(['current_date' => $currentDate]);
-$categorySpending = $stmt->fetchAll();
+$upcomingTransactions = $stmt->fetchAll();
 
 // Include header
 require_once 'includes/header.php';
@@ -184,7 +162,7 @@ require_once 'includes/header.php';
         <div class="stat-label">Upcoming Income</div>
         <div class="stat-trend trend-neutral">
             <i class="fas fa-calendar"></i>
-            Next 30 days
+            Next <span class="days-range"><?php echo $timeRange; ?></span> days
         </div>
     </div>
     
@@ -197,7 +175,7 @@ require_once 'includes/header.php';
         <div class="stat-label">Upcoming Expenses</div>
         <div class="stat-trend trend-neutral">
             <i class="fas fa-calendar"></i>
-            Next 30 days
+            Next <span class="days-range"><?php echo $timeRange; ?></span> days
         </div>
     </div>
     
@@ -238,113 +216,45 @@ require_once 'includes/header.php';
 </div>
 
 <div class="row">
-    <div class="col-lg-8">
-        <!-- Recent Transactions -->
-        <div class="recent-transactions">
-            <div class="transactions-header">
-                <div class="transactions-title">Upcoming Transactions</div>
-                <div class="transactions-nav">
-                    <a href="#" class="active" data-filter="all">All</a>
-                    <a href="#" data-filter="incoming">Income</a>
-                    <a href="#" data-filter="outgoing">Expenses</a>
-                </div>
-            </div>
-            
-            <div class="transaction-list">
-                <?php if (empty($recentTransactions)): ?>
-                    <div class="transaction-item">
-                        <div class="transaction-details">
-                            <div class="transaction-title">No upcoming transactions found</div>
-                        </div>
-                    </div>
-                <?php else: ?>
-                    <?php foreach ($recentTransactions as $transaction): ?>
-                        <div class="transaction-item" data-type="<?php echo $transaction['type']; ?>">
-                            <div class="transaction-icon <?php echo $transaction['type']; ?>">
-                                <i class="fas fa-<?php echo ($transaction['type'] === 'incoming') ? 'arrow-down' : 'arrow-up'; ?>"></i>
-                            </div>
-                            <div class="transaction-details">
-                                <div class="transaction-title"><?php echo htmlspecialchars($transaction['description']); ?></div>
-                                <div class="transaction-category"><?php echo htmlspecialchars($transaction['category'] ?? 'Uncategorized'); ?></div>
-                            </div>
-                            <div class="transaction-amount amount-<?php echo $transaction['type']; ?>">
-                                <?php echo ($transaction['type'] === 'incoming' ? '+' : '-'); ?><?php echo number_format($transaction['amount'], 2); ?> kr
-                            </div>
-                            <div class="transaction-date">
-                                <?php echo date('M d, Y', strtotime($transaction['date'])); ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-            
-            <div class="transactions-footer">
-                <a href="/modules/incoming/index.php">View All Incoming</a> | 
-                <a href="/modules/outgoing/index.php">View All Outgoing</a>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-lg-4">
-        <!-- Upcoming Expenses -->
+    <div class="col-lg-12">
+        <!-- Upcoming Transactions (Combined) -->
         <div class="upcoming-expenses">
             <div class="upcoming-header">
-                <div class="upcoming-title">Upcoming Expenses</div>
+                <div class="upcoming-title">Upcoming Transactions <span class="small">(Next <span id="transaction-days"><?php echo $timeRange; ?></span> days)</span></div>
+                <div id="transactions-loading" class="loading-indicator" style="display: none;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading...
+                </div>
             </div>
             
-            <div class="expense-list">
-                <?php if (empty($upcomingExpenses)): ?>
+            <div id="transactions-container" class="expense-list">
+                <?php if (empty($upcomingTransactions)): ?>
                     <div class="expense-item">
                         <div class="expense-details">
-                            <div class="expense-title">No upcoming expenses</div>
+                            <div class="expense-title">No upcoming transactions</div>
                         </div>
                     </div>
                 <?php else: ?>
-                    <?php foreach ($upcomingExpenses as $expense): ?>
+                    <?php foreach ($upcomingTransactions as $transaction): ?>
                         <div class="expense-item">
                             <div class="expense-date">
-                                <div class="expense-day"><?php echo date('d', strtotime($expense['date'])); ?></div>
-                                <div class="expense-month"><?php echo date('M', strtotime($expense['date'])); ?></div>
+                                <div class="expense-day"><?php echo date('d', strtotime($transaction['date'])); ?></div>
+                                <div class="expense-month"><?php echo date('M', strtotime($transaction['date'])); ?></div>
                             </div>
                             <div class="expense-details">
-                                <div class="expense-title"><?php echo htmlspecialchars($expense['description']); ?></div>
-                                <div class="expense-category"><?php echo htmlspecialchars($expense['category'] ?? 'Uncategorized'); ?></div>
+                                <div class="expense-title">
+                                    <?php echo htmlspecialchars($transaction['description']); ?>
+                                    <span class="transaction-type-badge type-<?php echo $transaction['type']; ?>">
+                                        <?php echo ($transaction['type'] === 'incoming') ? 'Income' : 'Expense'; ?>
+                                    </span>
+                                </div>
+                                <div class="expense-category"><?php echo htmlspecialchars($transaction['category'] ?? 'Uncategorized'); ?></div>
                             </div>
-                            <div class="expense-amount">
-                                -<?php echo number_format($expense['amount'], 2); ?> kr
+                            <div class="expense-amount <?php echo ($transaction['type'] === 'incoming') ? 'amount-income' : 'amount-expense'; ?>">
+                                <?php echo ($transaction['type'] === 'incoming' ? '+' : '-'); ?><?php echo number_format($transaction['amount'], 2); ?> kr
                             </div>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
-            </div>
-        </div>
-        
-        <!-- Categories Spending -->
-        <div class="categories-chart">
-            <div class="categories-header">
-                <div class="categories-title">Upcoming Expenses by Category</div>
-            </div>
-            
-            <div class="categories-container">
-                <div class="categories-donut">
-                    <canvas id="categoriesChart"></canvas>
-                </div>
-                
-                <div class="categories-legend">
-                    <?php foreach ($categorySpending as $category): ?>
-                        <div class="legend-item">
-                            <div class="legend-color" style="background-color: <?php echo htmlspecialchars($category['color']); ?>"></div>
-                            <div class="legend-name"><?php echo htmlspecialchars($category['name']); ?></div>
-                            <div class="legend-value"><?php echo number_format($category['total'], 2); ?> kr</div>
-                        </div>
-                    <?php endforeach; ?>
-                    
-                    <?php if (empty($categorySpending)): ?>
-                        <div class="legend-item">
-                            <div class="legend-name">No category data available</div>
-                        </div>
-                    <?php endif; ?>
-                </div>
             </div>
         </div>
     </div>
@@ -354,7 +264,218 @@ require_once 'includes/header.php';
 .text-right {
     text-align: right;
 }
+
+/* Transaction type badges */
+.transaction-type-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+}
+
+.type-incoming {
+    background-color: rgba(46, 204, 113, 0.2);
+    color: var(--secondary-dark);
+}
+
+.type-outgoing {
+    background-color: rgba(231, 76, 60, 0.2);
+    color: #c0392b;
+}
+
+/* Transaction amounts */
+.amount-income {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.amount-expense {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+/* Modified layout for full width */
+.col-lg-12 {
+    position: relative;
+    width: 100%;
+    padding-right: 15px;
+    padding-left: 15px;
+}
+
+@media (min-width: 992px) {
+    .col-lg-12 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+/* Loading indicator */
+.loading-indicator {
+    color: var(--gray);
+    font-size: 14px;
+}
+
+.loading-indicator i {
+    margin-right: 5px;
+}
+
+/* Header with loading indicator */
+.upcoming-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.small {
+    font-size: 0.85em;
+    font-weight: normal;
+    color: var(--gray);
+}
 </style>
+
+<!-- Custom Script for Dynamic Date Range -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get the timeline range dropdown
+    const timelineRange = document.getElementById('timelineRange');
+    
+    // Add event listener to update transactions when range changes
+    if (timelineRange) {
+        timelineRange.addEventListener('change', function() {
+            const days = parseInt(this.value, 10);
+            updateDashboardData(days);
+        });
+    }
+    
+    // Function to update transaction data based on selected days
+    function updateDashboardData(days) {
+        // Update days display
+        document.querySelectorAll('.days-range').forEach(el => {
+            el.textContent = days;
+        });
+        document.getElementById('transaction-days').textContent = days;
+        
+        // Show loading indicators
+        document.getElementById('transactions-loading').style.display = 'block';
+        
+        // Fetch updated transactions
+        fetch(`/api_dashboard.php?action=transactions&days=${days}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update transaction UI
+                    updateTransactionsList(data.data.transactions);
+                    
+                    // Update stats cards
+                    updateStatsCards(data.data.stats);
+                } else {
+                    console.error('Error fetching transactions:', data.message);
+                }
+                
+                // Hide loading indicators
+                document.getElementById('transactions-loading').style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Error fetching transactions:', error);
+                document.getElementById('transactions-loading').style.display = 'none';
+            });
+    }
+    
+    // Update transactions list in UI
+    function updateTransactionsList(transactions) {
+        const container = document.getElementById('transactions-container');
+        
+        // Clear current content
+        container.innerHTML = '';
+        
+        if (transactions.length === 0) {
+            container.innerHTML = `
+                <div class="expense-item">
+                    <div class="expense-details">
+                        <div class="expense-title">No upcoming transactions</div>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        // Add transactions
+        transactions.forEach(transaction => {
+            const date = new Date(transaction.date);
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('default', { month: 'short' });
+            
+            container.innerHTML += `
+                <div class="expense-item">
+                    <div class="expense-date">
+                        <div class="expense-day">${day}</div>
+                        <div class="expense-month">${month}</div>
+                    </div>
+                    <div class="expense-details">
+                        <div class="expense-title">
+                            ${escapeHtml(transaction.description)}
+                            <span class="transaction-type-badge type-${transaction.type}">
+                                ${transaction.type === 'incoming' ? 'Income' : 'Expense'}
+                            </span>
+                        </div>
+                        <div class="expense-category">${escapeHtml(transaction.category || 'Uncategorized')}</div>
+                    </div>
+                    <div class="expense-amount ${transaction.type === 'incoming' ? 'amount-income' : 'amount-expense'}">
+                        ${transaction.type === 'incoming' ? '+' : '-'}${formatNumber(transaction.amount)} kr
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    // Update stats cards with new data
+    function updateStatsCards(stats) {
+        if (!stats) return;
+        
+        // Update income card
+        const incomeValue = document.querySelector('.stat-card:nth-child(2) .stat-value');
+        if (incomeValue) {
+            incomeValue.textContent = formatNumber(stats.upcomingIncome) + ' kr';
+        }
+        
+        // Update expense card
+        const expenseValue = document.querySelector('.stat-card:nth-child(3) .stat-value');
+        if (expenseValue) {
+            expenseValue.textContent = formatNumber(stats.upcomingExpenses) + ' kr';
+        }
+        
+        // Update balance trend
+        const balanceTrend = document.querySelector('.stat-card:nth-child(1) .stat-trend');
+        if (balanceTrend && stats.projectedBalance !== undefined && stats.currentBalance !== undefined) {
+            const projectedChange = stats.projectedBalance - stats.currentBalance;
+            const percentChange = stats.currentBalance !== 0 ? (projectedChange / Math.abs(stats.currentBalance) * 100).toFixed(1) : 0;
+            
+            balanceTrend.className = 'stat-trend ' + (projectedChange >= 0 ? 'trend-up' : 'trend-down');
+            balanceTrend.innerHTML = `
+                <i class="fas ${projectedChange >= 0 ? 'fa-arrow-up' : 'fa-arrow-down'}"></i>
+                ${Math.abs(percentChange)}% projected change
+            `;
+        }
+    }
+    
+    // Utility function to escape HTML
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Format number with thousand separators
+    function formatNumber(value) {
+        return new Intl.NumberFormat('no-NO', { 
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(value);
+    }
+});
+</script>
 
 <?php
 // Include footer
