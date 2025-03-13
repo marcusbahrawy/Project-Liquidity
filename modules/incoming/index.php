@@ -1,6 +1,6 @@
 <?php
 /**
- * Incoming Transactions View
+ * Incoming Transactions View - Simplified with Robust Search Fix
  */
 
 // Include database connection
@@ -9,95 +9,53 @@ require_once '../../config/database.php';
 // Include helper functions
 require_once '../../includes/functions.php';
 
-// Get filter parameters
-$category_id = isset($_GET['category']) ? (int)$_GET['category'] : null;
-$date_from = isset($_GET['date_from']) ? $_GET['date_from'] : null;
-$date_to = isset($_GET['date_to']) ? $_GET['date_to'] : null;
+// Get filter parameters - keeping only search, sort and order
 $search = isset($_GET['search']) ? trim($_GET['search']) : null;
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
 
+// Initialize transactions array
+$transactions = [];
+$total_amount = 0;
+
 // Build the query
-$query = "
-    SELECT i.*, c.name as category_name, c.color as category_color
-    FROM incoming i
-    LEFT JOIN categories c ON i.category_id = c.id
-    WHERE i.parent_id IS NULL
-";
-
-$params = [];
-
-// Apply filters
-if ($category_id) {
-    $query .= " AND i.category_id = :category_id";
-    $params['category_id'] = $category_id;
+if (!empty($search)) {
+    // Query with search
+    $query = "
+        SELECT i.*, c.name as category_name, c.color as category_color
+        FROM incoming i
+        LEFT JOIN categories c ON i.category_id = c.id
+        WHERE i.parent_id IS NULL AND (i.description LIKE ? OR i.notes LIKE ?)
+        ORDER BY i.{$sort} {$order}
+    ";
+    
+    // Execute with positional parameters (more reliable)
+    $stmt = $pdo->prepare($query);
+    $searchParam = "%{$search}%";
+    $stmt->execute([$searchParam, $searchParam]);
+    $transactions = $stmt->fetchAll();
+} else {
+    // Query without search
+    $query = "
+        SELECT i.*, c.name as category_name, c.color as category_color
+        FROM incoming i
+        LEFT JOIN categories c ON i.category_id = c.id
+        WHERE i.parent_id IS NULL
+        ORDER BY i.{$sort} {$order}
+    ";
+    
+    // Execute without parameters
+    $stmt = $pdo->prepare($query);
+    $stmt->execute();
+    $transactions = $stmt->fetchAll();
 }
 
-if ($date_from) {
-    $query .= " AND i.date >= :date_from";
-    $params['date_from'] = $date_from;
+// Calculate total from fetched transactions
+if (!empty($transactions)) {
+    foreach ($transactions as $transaction) {
+        $total_amount += $transaction['amount'];
+    }
 }
-
-if ($date_to) {
-    $query .= " AND i.date <= :date_to";
-    $params['date_to'] = $date_to;
-}
-
-if ($search) {
-    $query .= " AND (i.description LIKE :search OR i.notes LIKE :search)";
-    $params['search'] = "%{$search}%";
-}
-
-// Apply sorting
-$query .= " ORDER BY i.{$sort} {$order}";
-
-// Get transactions
-$stmt = $pdo->prepare($query);
-$stmt->execute($params);
-$transactions = $stmt->fetchAll();
-
-// Get categories for filter dropdown
-$stmt = $pdo->prepare("
-    SELECT * FROM categories
-    WHERE type IN ('incoming', 'both')
-    ORDER BY name ASC
-");
-$stmt->execute();
-$categories = $stmt->fetchAll();
-
-// Get total incoming for filtered period
-$total_query = "
-    SELECT SUM(amount) as total
-    FROM incoming
-    WHERE parent_id IS NULL
-";
-
-$total_params = [];
-
-if ($category_id) {
-    $total_query .= " AND category_id = :category_id";
-    $total_params['category_id'] = $category_id;
-}
-
-if ($date_from) {
-    $total_query .= " AND date >= :date_from";
-    $total_params['date_from'] = $date_from;
-}
-
-if ($date_to) {
-    $total_query .= " AND date <= :date_to";
-    $total_params['date_to'] = $date_to;
-}
-
-if ($search) {
-    $total_query .= " AND (description LIKE :search OR notes LIKE :search)";
-    $total_params['search'] = "%{$search}%";
-}
-
-$stmt = $pdo->prepare($total_query);
-$stmt->execute($total_params);
-$total = $stmt->fetch();
-$total_amount = $total['total'] ?? 0;
 
 // Include header
 require_once '../../includes/header.php';
@@ -116,75 +74,30 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<!-- Filters -->
+<!-- Simplified Filters - Only Search -->
 <div class="card mb-4">
     <div class="card-body">
         <form id="filters-form" class="filters-form" method="GET">
             <div class="form-row">
-                <div class="form-group col-md-3">
-                    <label for="date_from">From Date</label>
-                    <input type="date" id="date_from" name="date_from" class="form-control" value="<?php echo htmlspecialchars($date_from ?? ''); ?>">
-                </div>
-                
-                <div class="form-group col-md-3">
-                    <label for="date_to">To Date</label>
-                    <input type="date" id="date_to" name="date_to" class="form-control" value="<?php echo htmlspecialchars($date_to ?? ''); ?>">
-                </div>
-                
-                <div class="form-group col-md-3">
-                    <label for="category">Category</label>
-                    <select id="category" name="category" class="form-select">
-                        <option value="">All Categories</option>
-                        <?php foreach ($categories as $category): ?>
-                            <option value="<?php echo $category['id']; ?>" <?php echo ($category_id == $category['id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($category['name']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div class="form-group col-md-3">
+                <div class="form-group col-md-12">
                     <label for="search">Search</label>
-                    <input type="text" id="search" name="search" class="form-control" placeholder="Search description or notes..." value="<?php echo htmlspecialchars($search ?? ''); ?>">
+                    <div class="search-container">
+                        <input type="text" id="search" name="search" class="form-control" placeholder="Search description or notes..." value="<?php echo htmlspecialchars($search ?? ''); ?>">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                        <?php if ($search): ?>
+                            <a href="index.php" class="btn btn-light">
+                                <i class="fas fa-times"></i> Clear
+                            </a>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
             
-            <div class="filters-actions">
-                <input type="hidden" name="sort" value="<?php echo htmlspecialchars($sort); ?>">
-                <input type="hidden" name="order" value="<?php echo htmlspecialchars($order); ?>">
-                
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <i class="fas fa-filter"></i> Apply Filters
-                </button>
-                
-                <a href="index.php" class="btn btn-light btn-sm">
-                    <i class="fas fa-times"></i> Clear Filters
-                </a>
-            </div>
+            <input type="hidden" name="sort" value="<?php echo htmlspecialchars($sort); ?>">
+            <input type="hidden" name="order" value="<?php echo htmlspecialchars($order); ?>">
         </form>
-    </div>
-</div>
-
-<!-- Summary & Stats -->
-<div class="stats-row mb-4">
-    <div class="stat-card">
-        <div class="stat-value"><?php echo number_format($total_amount, 2); ?> kr</div>
-        <div class="stat-label">Total Income</div>
-    </div>
-    
-    <div class="stat-card">
-        <div class="stat-value"><?php echo count($transactions); ?></div>
-        <div class="stat-label">Transactions</div>
-    </div>
-    
-    <div class="stat-card">
-        <div class="stat-value">
-            <?php
-            $avg = count($transactions) > 0 ? $total_amount / count($transactions) : 0;
-            echo number_format($avg, 2);
-            ?> kr
-        </div>
-        <div class="stat-label">Average Transaction</div>
     </div>
 </div>
 
@@ -198,10 +111,10 @@ require_once '../../includes/header.php';
                     <i class="fas fa-download"></i> Export
                 </button>
                 <div class="dropdown-menu dropdown-menu-right" aria-labelledby="exportDropdown">
-                    <a class="dropdown-item" href="api.php?action=export&format=csv<?php echo buildQueryParams(['category', 'date_from', 'date_to', 'search']); ?>">
+                    <a class="dropdown-item" href="api.php?action=export&format=csv<?php echo $search ? '&search=' . urlencode($search) : ''; ?>">
                         <i class="fas fa-file-csv"></i> Export as CSV
                     </a>
-                    <a class="dropdown-item" href="api.php?action=export&format=pdf<?php echo buildQueryParams(['category', 'date_from', 'date_to', 'search']); ?>">
+                    <a class="dropdown-item" href="api.php?action=export&format=pdf<?php echo $search ? '&search=' . urlencode($search) : ''; ?>">
                         <i class="fas fa-file-pdf"></i> Export as PDF
                     </a>
                 </div>
@@ -214,7 +127,7 @@ require_once '../../includes/header.php';
             <thead>
                 <tr>
                     <th>
-                        <a href="?sort=date&order=<?php echo ($sort === 'date' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['category', 'date_from', 'date_to', 'search']); ?>">
+                        <a href="?sort=date&order=<?php echo ($sort === 'date' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
                             Date
                             <?php if ($sort === 'date'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -222,7 +135,7 @@ require_once '../../includes/header.php';
                         </a>
                     </th>
                     <th>
-                        <a href="?sort=description&order=<?php echo ($sort === 'description' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['category', 'date_from', 'date_to', 'search']); ?>">
+                        <a href="?sort=description&order=<?php echo ($sort === 'description' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
                             Description
                             <?php if ($sort === 'description'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -231,7 +144,7 @@ require_once '../../includes/header.php';
                     </th>
                     <th>Category</th>
                     <th>
-                        <a href="?sort=amount&order=<?php echo ($sort === 'amount' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['category', 'date_from', 'date_to', 'search']); ?>">
+                        <a href="?sort=amount&order=<?php echo ($sort === 'amount' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
                             Amount
                             <?php if ($sort === 'amount'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -298,15 +211,15 @@ require_once '../../includes/header.php';
                         
                         <?php if ($transaction['is_split']): ?>
                             <?php
-                            // Get split transactions
+                            // Get split transactions using positional parameters
                             $stmt = $pdo->prepare("
                                 SELECT i.*, c.name as category_name, c.color as category_color
                                 FROM incoming i
                                 LEFT JOIN categories c ON i.category_id = c.id
-                                WHERE i.parent_id = :parent_id
+                                WHERE i.parent_id = ?
                                 ORDER BY i.amount DESC
                             ");
-                            $stmt->execute(['parent_id' => $transaction['id']]);
+                            $stmt->execute([$transaction['id']]);
                             $splits = $stmt->fetchAll();
                             ?>
                             
@@ -386,6 +299,15 @@ require_once '../../includes/header.php';
     margin-bottom: 0;
 }
 
+.search-container {
+    display: flex;
+    gap: 10px;
+}
+
+.search-container .form-control {
+    flex-grow: 1;
+}
+
 .form-row {
     display: flex;
     flex-wrap: wrap;
@@ -399,21 +321,9 @@ require_once '../../includes/header.php';
     margin-bottom: 15px;
 }
 
-.col-md-3 {
-    flex: 0 0 25%;
-    max-width: 25%;
-}
-
-.filters-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-}
-
-.stats-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
+.col-md-12 {
+    flex: 0 0 100%;
+    max-width: 100%;
 }
 
 .category-badge {
@@ -533,3 +443,4 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
 // Include footer
 require_once '../../includes/footer.php';
+?>
