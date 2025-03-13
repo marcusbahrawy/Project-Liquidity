@@ -92,6 +92,8 @@ require_once '../../includes/header.php';
         <form id="incomingForm" class="needs-validation ajax-form" action="api.php?action=update" method="post" novalidate>
             <input type="hidden" name="id" value="<?php echo $transaction['id']; ?>">
             
+            <?php if (!$isSplitItem): ?>
+            <!-- Normal transaction edit - show all fields -->
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label for="description">Description *</label>
@@ -112,7 +114,7 @@ require_once '../../includes/header.php';
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label for="date">Date *</label>
-                    <input type="date" id="date" name="date" class="form-control datepicker" value="<?php echo $transaction['date']; ?>" required <?php echo $isSplitItem ? '' : ''; ?>>
+                    <input type="date" id="date" name="date" class="form-control datepicker" value="<?php echo $transaction['date']; ?>" required>
                     <div class="invalid-feedback">Please select a date.</div>
                 </div>
                 
@@ -134,79 +136,101 @@ require_once '../../includes/header.php';
                 <textarea id="notes" name="notes" class="form-control" rows="3"><?php echo htmlspecialchars($transaction['notes'] ?? ''); ?></textarea>
             </div>
             
+            <?php else: ?>
+            <!-- Split item edit - simplified interface with only amount and date -->
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="amount">Amount (kr) *</label>
+                    <input type="number" id="amount" name="amount" class="form-control" step="0.01" min="0.01" value="<?php echo $transaction['amount']; ?>" required>
+                    <div class="invalid-feedback">Please provide a valid amount greater than 0.</div>
+                </div>
+                
+                <div class="form-group col-md-6">
+                    <label for="date">Date *</label>
+                    <input type="date" id="date" name="date" class="form-control datepicker" value="<?php echo $transaction['date']; ?>" required>
+                    <div class="invalid-feedback">Please select a date.</div>
+                </div>
+            </div>
+            
+            <!-- Adding hidden fields so form submission still works -->
+            <input type="hidden" name="description" value="<?php echo htmlspecialchars($transaction['description']); ?>">
+            <input type="hidden" name="category_id" value="<?php echo $transaction['category_id']; ?>">
+            <input type="hidden" name="notes" value="<?php echo htmlspecialchars($transaction['notes'] ?? ''); ?>">
+            <?php endif; ?>
+            
             <?php if (!$isSplitItem && !$isSplit): ?>
-                <div class="form-divider">
-                    <h3>Split Transaction (Optional)</h3>
-                    <p class="text-muted">If you want to split this transaction into multiple parts, add the splits below.</p>
-                </div>
-                
-                <div id="splits-container">
-                    <!-- Split items will be added here -->
-                </div>
-                
-                <div class="mb-3">
-                    <button type="button" id="add-split" class="btn btn-light btn-sm">
-                        <i class="fas fa-plus"></i> Add Split
-                    </button>
-                </div>
+            <div class="form-divider">
+                <h3>Split Transaction (Optional)</h3>
+                <p class="text-muted">If you want to split this transaction into multiple parts, add the splits below.</p>
+            </div>
+            
+            <div id="splits-container">
+                <!-- Split items will be added here -->
+            </div>
+            
+            <div class="mb-3">
+                <button type="button" id="add-split" class="btn btn-light btn-sm">
+                    <i class="fas fa-plus"></i> Add Split
+                </button>
+            </div>
             <?php elseif ($isSplit): ?>
-                <div class="form-divider">
-                    <h3>Split Items</h3>
-                    <p class="text-muted">This transaction is split into the following items.</p>
-                </div>
-                
-                <div id="splits-container">
-                    <?php foreach ($splits as $index => $split): ?>
-                        <div class="split-item" data-id="<?php echo $split['id']; ?>">
-                            <div class="split-header">
-                                <h4>Split #<?php echo $index + 1; ?></h4>
-                                <a href="edit.php?id=<?php echo $split['id']; ?>" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-edit"></i> Edit Split
-                                </a>
+            <div class="form-divider">
+                <h3>Split Items</h3>
+                <p class="text-muted">This transaction is split into the following items.</p>
+            </div>
+            
+            <div id="splits-container">
+                <?php foreach ($splits as $index => $split): ?>
+                    <div class="split-item" data-id="<?php echo $split['id']; ?>">
+                        <div class="split-header">
+                            <h4>Split #<?php echo $index + 1; ?></h4>
+                            <a href="edit.php?id=<?php echo $split['id']; ?>" class="btn btn-sm btn-primary">
+                                <i class="fas fa-edit"></i> Edit Split
+                            </a>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group col-md-3">
+                                <label>Amount</label>
+                                <p class="form-control-static"><?php echo number_format($split['amount'], 2); ?> kr</p>
                             </div>
                             
-                            <div class="form-row">
-                                <div class="form-group col-md-3">
-                                    <label>Amount</label>
-                                    <p class="form-control-static"><?php echo number_format($split['amount'], 2); ?> kr</p>
-                                </div>
-                                
-                                <div class="form-group col-md-3">
-                                    <label>Date</label>
-                                    <p class="form-control-static"><?php echo date('M d, Y', strtotime($split['date'])); ?></p>
-                                </div>
+                            <div class="form-group col-md-3">
+                                <label>Date</label>
+                                <p class="form-control-static"><?php echo date('M d, Y', strtotime($split['date'])); ?></p>
                             </div>
                         </div>
-                    <?php endforeach; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            
+            <div class="split-summary">
+                <div class="summary-item">
+                    <span class="summary-label">Total Amount:</span>
+                    <span class="summary-value"><?php echo number_format($transaction['amount'], 2); ?> kr</span>
                 </div>
                 
-                <div class="split-summary">
-                    <div class="summary-item">
-                        <span class="summary-label">Total Amount:</span>
-                        <span class="summary-value"><?php echo number_format($transaction['amount'], 2); ?> kr</span>
-                    </div>
-                    
-                    <div class="summary-item">
-                        <span class="summary-label">Splits Total:</span>
+                <div class="summary-item">
+                    <span class="summary-label">Splits Total:</span>
+                    <span class="summary-value">
+                        <?php
+                        $splitsTotal = array_reduce($splits, function($carry, $item) {
+                            return $carry + $item['amount'];
+                        }, 0);
+                        echo number_format($splitsTotal, 2);
+                        ?> kr
+                    </span>
+                </div>
+                
+                <?php if ($splitsTotal != $transaction['amount']): ?>
+                    <div class="summary-item difference">
+                        <span class="summary-label">Difference:</span>
                         <span class="summary-value">
-                            <?php
-                            $splitsTotal = array_reduce($splits, function($carry, $item) {
-                                return $carry + $item['amount'];
-                            }, 0);
-                            echo number_format($splitsTotal, 2);
-                            ?> kr
+                            <?php echo number_format($transaction['amount'] - $splitsTotal, 2); ?> kr
                         </span>
                     </div>
-                    
-                    <?php if ($splitsTotal != $transaction['amount']): ?>
-                        <div class="summary-item difference">
-                            <span class="summary-label">Difference:</span>
-                            <span class="summary-value">
-                                <?php echo number_format($transaction['amount'] - $splitsTotal, 2); ?> kr
-                            </span>
-                        </div>
-                    <?php endif; ?>
-                </div>
+                <?php endif; ?>
+            </div>
             <?php endif; ?>
             
             <div class="form-actions">
@@ -428,6 +452,17 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .alert-info i {
+    margin-right: 8px;
+}
+
+.alert-warning {
+    background-color: rgba(243, 156, 18, 0.2);
+    color: #d35400;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.alert-warning i {
     margin-right: 8px;
 }
 </style>
