@@ -112,11 +112,8 @@ require_once '../../includes/header.php';
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label for="date">Date *</label>
-                    <input type="date" id="date" name="date" class="form-control datepicker" value="<?php echo $transaction['date']; ?>" required <?php echo $isSplitItem ? 'readonly' : ''; ?>>
+                    <input type="date" id="date" name="date" class="form-control datepicker" value="<?php echo $transaction['date']; ?>" required <?php echo $isSplitItem ? '' : ''; ?>>
                     <div class="invalid-feedback">Please select a date.</div>
-                    <?php if ($isSplitItem): ?>
-                        <small class="form-text text-muted">Date cannot be changed for individual split items. Edit the parent transaction instead.</small>
-                    <?php endif; ?>
                 </div>
                 
                 <div class="form-group col-md-6">
@@ -195,6 +192,13 @@ require_once '../../includes/header.php';
                                         }
                                         ?>
                                     </p>
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group col-md-3">
+                                    <label>Date</label>
+                                    <p class="form-control-static"><?php echo date('M d, Y', strtotime($split['date'])); ?></p>
                                 </div>
                             </div>
                             
@@ -301,6 +305,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <button type="button" class="btn btn-danger form-control remove-split" data-id="${splitCounter}">
                         <i class="fas fa-trash"></i>
                     </button>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="split_date_${splitCounter}">Date</label>
+                    <input type="date" id="split_date_${splitCounter}" name="splits[${splitCounter}][date]" class="form-control datepicker" value="${document.getElementById('date').value}">
                 </div>
             </div>
             
@@ -470,3 +481,4 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
 // Include footer
 require_once '../../includes/footer.php';
+?>

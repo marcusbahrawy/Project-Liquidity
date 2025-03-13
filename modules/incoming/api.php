@@ -103,16 +103,25 @@ function addTransaction() {
                 
                 $totalSplitAmount += $split['amount'];
                 
+                // Get the split date or use parent date if not provided
+                $splitDate = !empty($split['date']) ? $split['date'] : $_POST['date'];
+                
                 // Insert split transaction
                 $stmt = $pdo->prepare("
-                    INSERT INTO incoming (description, amount, date, category_id, notes, parent_id, created_at)
-                    VALUES (:description, :amount, :date, :category_id, :notes, :parent_id, NOW())
+                    INSERT INTO incoming (
+                        description, amount, date, category_id, notes, 
+                        parent_id, created_at
+                    )
+                    VALUES (
+                        :description, :amount, :date, :category_id, :notes, 
+                        :parent_id, NOW()
+                    )
                 ");
                 
                 $stmt->execute([
                     'description' => $split['description'],
                     'amount' => $split['amount'],
-                    'date' => $_POST['date'],
+                    'date' => $splitDate, // Use the specific date for this split
                     'category_id' => !empty($split['category_id']) ? $split['category_id'] : null,
                     'notes' => $split['notes'] ?? null,
                     'parent_id' => $parentId
@@ -187,10 +196,10 @@ function updateTransaction() {
         $isSplitItem = !empty($transaction['parent_id']);
         
         if ($isSplitItem) {
-            // Only update description, category, and notes for split items
+            // Only update description, category, date and notes for split items
             $stmt = $pdo->prepare("
                 UPDATE incoming
-                SET description = :description, category_id = :category_id, notes = :notes
+                SET description = :description, category_id = :category_id, notes = :notes, date = :date
                 WHERE id = :id
             ");
             
@@ -198,6 +207,7 @@ function updateTransaction() {
                 'description' => $_POST['description'],
                 'category_id' => !empty($_POST['category_id']) ? $_POST['category_id'] : null,
                 'notes' => $_POST['notes'] ?? null,
+                'date' => $_POST['date'], // Allow updating date for split items
                 'id' => $_POST['id']
             ]);
             
@@ -239,19 +249,6 @@ function updateTransaction() {
                 'id' => $_POST['id']
             ]);
             
-            // If this transaction already has splits, update their date
-            if ($transaction['is_split']) {
-                $stmt = $pdo->prepare("
-                    UPDATE incoming
-                    SET date = :date
-                    WHERE parent_id = :parent_id
-                ");
-                $stmt->execute([
-                    'date' => $_POST['date'],
-                    'parent_id' => $_POST['id']
-                ]);
-            }
-            
             // Handle new splits
             if ($hasSplits && !$transaction['is_split']) {
                 $totalSplitAmount = 0;
@@ -269,6 +266,9 @@ function updateTransaction() {
                     
                     $totalSplitAmount += $split['amount'];
                     
+                    // Get the split date or use parent date if not provided
+                    $splitDate = !empty($split['date']) ? $split['date'] : $_POST['date'];
+                    
                     // Insert split transaction
                     $stmt = $pdo->prepare("
                         INSERT INTO incoming (description, amount, date, category_id, notes, parent_id, created_at)
@@ -278,7 +278,7 @@ function updateTransaction() {
                     $stmt->execute([
                         'description' => $split['description'],
                         'amount' => $split['amount'],
-                        'date' => $_POST['date'],
+                        'date' => $splitDate, // Use the specific date for this split
                         'category_id' => !empty($split['category_id']) ? $split['category_id'] : null,
                         'notes' => $split['notes'] ?? null,
                         'parent_id' => $_POST['id']

@@ -254,6 +254,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
             
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="split_date_${splitCounter}">Date</label>
+                    <input type="date" id="split_date_${splitCounter}" name="splits[${splitCounter}][date]" class="form-control datepicker" value="${document.getElementById('date').value}">
+                </div>
+            </div>
+            
             <div class="form-group">
                 <label for="split_notes_${splitCounter}">Notes</label>
                 <textarea id="split_notes_${splitCounter}" name="splits[${splitCounter}][notes]" class="form-control" rows="2"></textarea>
@@ -272,6 +279,16 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add event listener to amount input
         splitItem.querySelector('.split-amount').addEventListener('input', updateSplitTotals);
+        
+        // Add event listener to sync main date to split date initially
+        const mainDateInput = document.getElementById('date');
+        const splitDateInput = document.getElementById(`split_date_${splitCounter}`);
+        
+        mainDateInput.addEventListener('change', function() {
+            if (!splitDateInput.value) {
+                splitDateInput.value = this.value;
+            }
+        });
         
         updateSplitTotals();
     }
@@ -409,3 +426,4 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
 // Include footer
 require_once '../../includes/footer.php';
+?>
