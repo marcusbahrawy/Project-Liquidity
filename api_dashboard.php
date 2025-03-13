@@ -88,6 +88,7 @@ function getTransactionsData() {
              LEFT JOIN categories c ON i.category_id = c.id
              WHERE i.date BETWEEN :current_date_inc AND :end_date_inc 
              AND i.parent_id IS NULL
+             AND (i.is_fixed = 0 OR i.repeat_interval = 'none')
              ORDER BY i.date ASC
              LIMIT 40)
             UNION ALL
@@ -96,6 +97,7 @@ function getTransactionsData() {
              LEFT JOIN categories c ON o.category_id = c.id
              WHERE o.date BETWEEN :current_date_out AND :end_date_out 
              AND o.parent_id IS NULL
+             AND (o.is_fixed = 0 OR o.repeat_interval = 'none')
              ORDER BY o.date ASC
              LIMIT 40)
             ORDER BY date ASC
@@ -109,6 +111,201 @@ function getTransactionsData() {
         ]);
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
+        // Get recurring INCOMING transactions
+        $stmt = $pdo->prepare("
+            SELECT i.id, i.description, i.amount, i.date, i.is_split, i.repeat_interval, 
+                   i.repeat_until, i.category_id, c.name as category, c.color
+            FROM incoming i
+            LEFT JOIN categories c ON i.category_id = c.id
+            WHERE i.is_fixed = 1 
+            AND i.repeat_interval != 'none'
+            AND i.parent_id IS NULL
+            AND (i.repeat_until IS NULL OR i.repeat_until >= :current_date)
+        ");
+        $stmt->execute(['current_date' => $currentDate]);
+        $recurringIncome = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Get recurring OUTGOING transactions
+        $stmt = $pdo->prepare("
+            SELECT o.id, o.description, o.amount, o.date, o.is_split, o.repeat_interval, 
+                   o.repeat_until, o.category_id, c.name as category, c.color
+            FROM outgoing o
+            LEFT JOIN categories c ON o.category_id = c.id
+            WHERE o.is_fixed = 1 
+            AND o.repeat_interval != 'none'
+            AND o.parent_id IS NULL
+            AND (o.repeat_until IS NULL OR o.repeat_until >= :current_date)
+        ");
+        $stmt->execute(['current_date' => $currentDate]);
+        $recurringExpenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Add virtual transactions for recurring income
+        foreach ($recurringIncome as $income) {
+            // Skip if it's a split parent - we'll handle splits separately
+            if ($income['is_split'] == 1) {
+                continue;
+            }
+            
+            $startDate = $income['date'];
+            $endDateForIncome = $income['repeat_until'] ? min($income['repeat_until'], $endDate) : $endDate;
+            $interval = $income['repeat_interval'];
+            
+            // Calculate occurrences using DateTime
+            $date = new DateTime($startDate);
+            $endDateObj = new DateTime($endDateForIncome);
+            $currentDateObj = new DateTime($currentDate);
+            
+            // If start date is in the past, begin from first occurrence after current date
+            if ($date < $currentDateObj) {
+                // Advance to first occurrence on or after current date
+                while ($date < $currentDateObj) {
+                    switch ($interval) {
+                        case 'daily':
+                            $date->modify('+1 day');
+                            break;
+                        case 'weekly':
+                            $date->modify('+1 week');
+                            break;
+                        case 'monthly':
+                            $date->modify('+1 month');
+                            break;
+                        case 'quarterly':
+                            $date->modify('+3 months');
+                            break;
+                        case 'yearly':
+                            $date->modify('+1 year');
+                            break;
+                    }
+                }
+            }
+            
+            // Create virtual transactions for all occurrences within our range
+            while ($date <= $endDateObj) {
+                $occurrenceDate = $date->format('Y-m-d');
+                
+                // Create a virtual transaction for this occurrence
+                $virtualTransaction = [
+                    'type' => 'incoming',
+                    'id' => $income['id'] . '_' . $occurrenceDate, // Create a unique ID
+                    'description' => $income['description'] . ' (Recurring)',
+                    'amount' => (float)$income['amount'],
+                    'date' => $occurrenceDate,
+                    'is_split' => 0,
+                    'category' => $income['category'],
+                    'color' => $income['color'],
+                    'is_recurring' => true, // Mark as recurring (virtual)
+                    'original_id' => $income['id'] // Store original transaction ID
+                ];
+                
+                $transactions[] = $virtualTransaction;
+                
+                // Advance to next occurrence
+                switch ($interval) {
+                    case 'daily':
+                        $date->modify('+1 day');
+                        break;
+                    case 'weekly':
+                        $date->modify('+1 week');
+                        break;
+                    case 'monthly':
+                        $date->modify('+1 month');
+                        break;
+                    case 'quarterly':
+                        $date->modify('+3 months');
+                        break;
+                    case 'yearly':
+                        $date->modify('+1 year');
+                        break;
+                }
+            }
+        }
+
+        // Add virtual transactions for recurring expenses
+        foreach ($recurringExpenses as $expense) {
+            // Skip if it's a split parent - we'll handle splits separately
+            if ($expense['is_split'] == 1) {
+                continue;
+            }
+            
+            $startDate = $expense['date'];
+            $endDateForExpense = $expense['repeat_until'] ? min($expense['repeat_until'], $endDate) : $endDate;
+            $interval = $expense['repeat_interval'];
+            
+            // Calculate occurrences using DateTime
+            $date = new DateTime($startDate);
+            $endDateObj = new DateTime($endDateForExpense);
+            $currentDateObj = new DateTime($currentDate);
+            
+            // If start date is in the past, begin from first occurrence after current date
+            if ($date < $currentDateObj) {
+                // Advance to first occurrence on or after current date
+                while ($date < $currentDateObj) {
+                    switch ($interval) {
+                        case 'daily':
+                            $date->modify('+1 day');
+                            break;
+                        case 'weekly':
+                            $date->modify('+1 week');
+                            break;
+                        case 'monthly':
+                            $date->modify('+1 month');
+                            break;
+                        case 'quarterly':
+                            $date->modify('+3 months');
+                            break;
+                        case 'yearly':
+                            $date->modify('+1 year');
+                            break;
+                    }
+                }
+            }
+            
+            // Create virtual transactions for all occurrences within our range
+            while ($date <= $endDateObj) {
+                $occurrenceDate = $date->format('Y-m-d');
+                
+                // Create a virtual transaction for this occurrence
+                $virtualTransaction = [
+                    'type' => 'outgoing',
+                    'id' => $expense['id'] . '_' . $occurrenceDate, // Create a unique ID
+                    'description' => $expense['description'] . ' (Recurring)',
+                    'amount' => (float)$expense['amount'],
+                    'date' => $occurrenceDate,
+                    'is_split' => 0,
+                    'category' => $expense['category'],
+                    'color' => $expense['color'],
+                    'is_recurring' => true, // Mark as recurring (virtual)
+                    'original_id' => $expense['id'] // Store original transaction ID
+                ];
+                
+                $transactions[] = $virtualTransaction;
+                
+                // Advance to next occurrence
+                switch ($interval) {
+                    case 'daily':
+                        $date->modify('+1 day');
+                        break;
+                    case 'weekly':
+                        $date->modify('+1 week');
+                        break;
+                    case 'monthly':
+                        $date->modify('+1 month');
+                        break;
+                    case 'quarterly':
+                        $date->modify('+3 months');
+                        break;
+                    case 'yearly':
+                        $date->modify('+1 year');
+                        break;
+                }
+            }
+        }
+        
+        // Sort transactions by date
+        usort($transactions, function($a, $b) {
+            return strtotime($a['date']) - strtotime($b['date']);
+        });
+        
         // Process transactions to include split items
         $organizedTransactions = [];
         
@@ -116,8 +313,8 @@ function getTransactionsData() {
             // Add the transaction to our organized list
             $organizedTransaction = $transaction;
             
-            // If it's a split transaction, fetch its split items
-            if ($transaction['is_split']) {
+            // If it's a split transaction and not a virtual recurring transaction, fetch its split items
+            if ($transaction['is_split'] && !isset($transaction['is_recurring'])) {
                 $splits = [];
                 
                 if ($transaction['type'] === 'incoming') {
