@@ -68,6 +68,40 @@ require_once '../../includes/header.php';
                 </div>
             </div>
             
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="is_fixed">Transaction Type</label>
+                    <div class="form-check-inline">
+                        <input type="radio" id="is_fixed_0" name="is_fixed" value="0" class="form-check-input" checked>
+                        <label for="is_fixed_0" class="form-check-label">One-time Income</label>
+                    </div>
+                    <div class="form-check-inline">
+                        <input type="radio" id="is_fixed_1" name="is_fixed" value="1" class="form-check-input">
+                        <label for="is_fixed_1" class="form-check-label">Recurring Income</label>
+                    </div>
+                </div>
+                
+                <div class="form-group col-md-6" id="repeat-container" style="display: none;">
+                    <label for="repeat_interval">Repeat Interval</label>
+                    <select id="repeat_interval" name="repeat_interval" class="form-select">
+                        <option value="none">No Repetition</option>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row" id="repeat-until-container" style="display: none;">
+                <div class="form-group col-md-6">
+                    <label for="repeat_until">Repeat Until</label>
+                    <input type="date" id="repeat_until" name="repeat_until" class="form-control datepicker">
+                    <small class="form-text text-muted">Leave empty for indefinite repetition</small>
+                </div>
+            </div>
+            
             <div class="form-group">
                 <label for="notes">Notes</label>
                 <textarea id="notes" name="notes" class="form-control" rows="3"></textarea>
@@ -101,6 +135,34 @@ require_once '../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize fixed income / recurrence functionality
+    const isFixedInputs = document.querySelectorAll('input[name="is_fixed"]');
+    const repeatContainer = document.getElementById('repeat-container');
+    const repeatIntervalSelect = document.getElementById('repeat_interval');
+    const repeatUntilContainer = document.getElementById('repeat-until-container');
+    
+    // Toggle repeat options based on fixed income selection
+    isFixedInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            if (this.value === '1' && this.checked) {
+                repeatContainer.style.display = 'block';
+            } else {
+                repeatContainer.style.display = 'none';
+                repeatIntervalSelect.value = 'none';
+                repeatUntilContainer.style.display = 'none';
+            }
+        });
+    });
+    
+    // Toggle repeat until field based on repeat interval
+    repeatIntervalSelect.addEventListener('change', function() {
+        if (this.value !== 'none') {
+            repeatUntilContainer.style.display = 'block';
+        } else {
+            repeatUntilContainer.style.display = 'none';
+        }
+    });
+    
     // Initialize split functionality
     let splitCounter = 0;
     const splitsContainer = document.getElementById('splits-container');
@@ -262,6 +324,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .alert-warning i {
     margin-right: 8px;
+}
+
+.form-check-inline {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 15px;
+}
+
+.form-check-input {
+    margin-right: 5px;
+}
+
+.form-check-label {
+    margin-bottom: 0;
 }
 </style>
 

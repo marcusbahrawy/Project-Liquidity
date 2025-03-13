@@ -67,6 +67,11 @@ function addTransaction() {
         // Check if we have splits
         $hasSplits = isset($_POST['splits']) && is_array($_POST['splits']) && count($_POST['splits']) > 0;
         
+        // Prepare data for recurring income
+        $is_fixed = isset($_POST['is_fixed']) && $_POST['is_fixed'] == 1 ? 1 : 0;
+        $repeat_interval = $is_fixed && isset($_POST['repeat_interval']) ? $_POST['repeat_interval'] : 'none';
+        $repeat_until = $is_fixed && $repeat_interval !== 'none' && !empty($_POST['repeat_until']) ? $_POST['repeat_until'] : null;
+        
         // Prepare main transaction data
         $data = [
             'description' => $_POST['description'],
@@ -74,13 +79,22 @@ function addTransaction() {
             'date' => $_POST['date'],
             'category_id' => !empty($_POST['category_id']) ? $_POST['category_id'] : null,
             'notes' => $_POST['notes'] ?? null,
-            'is_split' => $hasSplits ? 1 : 0
+            'is_split' => $hasSplits ? 1 : 0,
+            'is_fixed' => $is_fixed,
+            'repeat_interval' => $repeat_interval,
+            'repeat_until' => $repeat_until
         ];
         
         // Insert main transaction
         $stmt = $pdo->prepare("
-            INSERT INTO incoming (description, amount, date, category_id, notes, is_split, created_at)
-            VALUES (:description, :amount, :date, :category_id, :notes, :is_split, NOW())
+            INSERT INTO incoming (
+                description, amount, date, category_id, notes, is_split, 
+                is_fixed, repeat_interval, repeat_until, created_at
+            )
+            VALUES (
+                :description, :amount, :date, :category_id, :notes, :is_split,
+                :is_fixed, :repeat_interval, :repeat_until, NOW()
+            )
         ");
         $stmt->execute($data);
         
@@ -232,10 +246,17 @@ function updateTransaction() {
                 ]);
             }
         } else {
+            // Prepare data for recurring income
+            $is_fixed = isset($_POST['is_fixed']) && $_POST['is_fixed'] == 1 ? 1 : 0;
+            $repeat_interval = $is_fixed && isset($_POST['repeat_interval']) ? $_POST['repeat_interval'] : 'none';
+            $repeat_until = $is_fixed && $repeat_interval !== 'none' && !empty($_POST['repeat_until']) ? $_POST['repeat_until'] : null;
+            
             // Update main transaction
             $stmt = $pdo->prepare("
                 UPDATE incoming
-                SET description = :description, amount = :amount, date = :date, category_id = :category_id, notes = :notes, is_split = :is_split
+                SET description = :description, amount = :amount, date = :date, 
+                    category_id = :category_id, notes = :notes, is_split = :is_split,
+                    is_fixed = :is_fixed, repeat_interval = :repeat_interval, repeat_until = :repeat_until
                 WHERE id = :id
             ");
             
@@ -246,8 +267,24 @@ function updateTransaction() {
                 'category_id' => !empty($_POST['category_id']) ? $_POST['category_id'] : null,
                 'notes' => $_POST['notes'] ?? null,
                 'is_split' => $hasSplits || $transaction['is_split'] ? 1 : 0,
+                'is_fixed' => $is_fixed,
+                'repeat_interval' => $repeat_interval,
+                'repeat_until' => $repeat_until,
                 'id' => $_POST['id']
             ]);
+            
+            // If this transaction already has splits, update their date
+            if ($transaction['is_split']) {
+                $stmt = $pdo->prepare("
+                    UPDATE incoming
+                    SET date = :date
+                    WHERE parent_id = :parent_id
+                ");
+                $stmt->execute([
+                    'date' => $_POST['date'],
+                    'parent_id' => $_POST['id']
+                ]);
+            }
             
             // Handle new splits
             if ($hasSplits && !$transaction['is_split']) {
@@ -278,7 +315,7 @@ function updateTransaction() {
                     $stmt->execute([
                         'description' => $split['description'],
                         'amount' => $split['amount'],
-                        'date' => $splitDate, // Use the specific date for this split
+                        'date' => $splitDate,
                         'category_id' => !empty($split['category_id']) ? $split['category_id'] : null,
                         'notes' => $split['notes'] ?? null,
                         'parent_id' => $_POST['id']
@@ -461,11 +498,12 @@ function exportTransactions() {
     $date_from = isset($_GET['date_from']) ? $_GET['date_from'] : null;
     $date_to = isset($_GET['date_to']) ? $_GET['date_to'] : null;
     $search = isset($_GET['search']) ? trim($_GET['search']) : null;
+    $is_fixed = isset($_GET['is_fixed']) ? (int)$_GET['is_fixed'] : null;
     
     // Build the query
     $query = "
         SELECT i.id, i.description, i.amount, i.date, i.notes, i.is_split,
-               c.name as category
+               i.is_fixed, i.repeat_interval, i.repeat_until, c.name as category
         FROM incoming i
         LEFT JOIN categories c ON i.category_id = c.id
         WHERE i.parent_id IS NULL
@@ -494,6 +532,11 @@ function exportTransactions() {
         $params['search'] = "%{$search}%";
     }
     
+    if (isset($is_fixed)) {
+        $query .= " AND i.is_fixed = :is_fixed";
+        $params['is_fixed'] = $is_fixed;
+    }
+    
     // Order by date
     $query .= " ORDER BY i.date DESC";
     
@@ -511,9 +554,7 @@ function exportTransactions() {
             break;
             
         case 'pdf':
-            // Just redirect to CSV for now, as PDF export requires additional libraries
-            header("Location: api.php?action=export&format=csv&" . http_build_query($_GET));
-            exit;
+            exportPdf($transactions);
             break;
             
         default:
@@ -533,16 +574,21 @@ function exportCsv($transactions) {
     $output = fopen('php://output', 'w');
     
     // Add headers
-    fputcsv($output, ['ID', 'Description', 'Amount', 'Date', 'Category', 'Notes', 'Split']);
+    fputcsv($output, ['ID', 'Description', 'Amount', 'Date', 'Category', 'Recurring', 'Repeat Interval', 'Notes', 'Split']);
     
     // Add data
     foreach ($transactions as $transaction) {
+        $recurring = $transaction['is_fixed'] ? 'Yes' : 'No';
+        $repeatInterval = $transaction['repeat_interval'] !== 'none' ? ucfirst($transaction['repeat_interval']) : 'N/A';
+        
         fputcsv($output, [
             $transaction['id'],
             $transaction['description'],
             $transaction['amount'],
             $transaction['date'],
             $transaction['category'] ?? 'Uncategorized',
+            $recurring,
+            $repeatInterval,
             $transaction['notes'],
             $transaction['is_split'] ? 'Yes' : 'No'
         ]);
@@ -550,6 +596,16 @@ function exportCsv($transactions) {
     
     // Close output stream
     fclose($output);
+    exit;
+}
+
+/**
+ * Export transactions as PDF
+ */
+function exportPdf($transactions) {
+    // This is a simple example, in a real application you would use a PDF library like FPDF or TCPDF
+    // For now, we'll just display a message
+    echo 'PDF export is not implemented yet. Please use CSV export.';
     exit;
 }
 

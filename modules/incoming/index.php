@@ -1,6 +1,6 @@
 <?php
 /**
- * Incoming Transactions View - Simplified with Robust Search Fix and Split Date Display
+ * Incoming Transactions View - Updated with Recurring Transaction Support
  */
 
 // Include database connection
@@ -13,6 +13,7 @@ require_once '../../includes/functions.php';
 $search = isset($_GET['search']) ? trim($_GET['search']) : null;
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
+$is_recurring = isset($_GET['recurring']) ? (int)$_GET['recurring'] : null;
 
 // Initialize transactions array
 $transactions = [];
@@ -26,13 +27,22 @@ if (!empty($search)) {
         FROM incoming i
         LEFT JOIN categories c ON i.category_id = c.id
         WHERE i.parent_id IS NULL AND (i.description LIKE ? OR i.notes LIKE ?)
-        ORDER BY i.{$sort} {$order}
     ";
+    
+    $params = ["%{$search}%", "%{$search}%"];
+    
+    // Add recurring filter if set
+    if (isset($is_recurring)) {
+        $query .= " AND i.is_fixed = ?";
+        $params[] = $is_recurring;
+    }
+    
+    // Add order by clause
+    $query .= " ORDER BY i.{$sort} {$order}";
     
     // Execute with positional parameters (more reliable)
     $stmt = $pdo->prepare($query);
-    $searchParam = "%{$search}%";
-    $stmt->execute([$searchParam, $searchParam]);
+    $stmt->execute($params);
     $transactions = $stmt->fetchAll();
 } else {
     // Query without search
@@ -41,12 +51,22 @@ if (!empty($search)) {
         FROM incoming i
         LEFT JOIN categories c ON i.category_id = c.id
         WHERE i.parent_id IS NULL
-        ORDER BY i.{$sort} {$order}
     ";
     
-    // Execute without parameters
+    $params = [];
+    
+    // Add recurring filter if set
+    if (isset($is_recurring)) {
+        $query .= " AND i.is_fixed = ?";
+        $params[] = $is_recurring;
+    }
+    
+    // Add order by clause
+    $query .= " ORDER BY i.{$sort} {$order}";
+    
+    // Execute with parameters if needed
     $stmt = $pdo->prepare($query);
-    $stmt->execute();
+    $stmt->execute($params);
     $transactions = $stmt->fetchAll();
 }
 
@@ -74,12 +94,12 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<!-- Simplified Filters - Only Search -->
+<!-- Filters -->
 <div class="card mb-4">
     <div class="card-body">
         <form id="filters-form" class="filters-form" method="GET">
             <div class="form-row">
-                <div class="form-group col-md-12">
+                <div class="form-group col-md-8">
                     <label for="search">Search</label>
                     <div class="search-container">
                         <input type="text" id="search" name="search" class="form-control" placeholder="Search description or notes..." value="<?php echo htmlspecialchars($search ?? ''); ?>">
@@ -92,6 +112,15 @@ require_once '../../includes/header.php';
                             </a>
                         <?php endif; ?>
                     </div>
+                </div>
+                
+                <div class="form-group col-md-4">
+                    <label for="recurring">Transaction Type</label>
+                    <select id="recurring" name="recurring" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Types</option>
+                        <option value="0" <?php echo isset($is_recurring) && $is_recurring === 0 ? 'selected' : ''; ?>>One-time Income</option>
+                        <option value="1" <?php echo isset($is_recurring) && $is_recurring === 1 ? 'selected' : ''; ?>>Recurring Income</option>
+                    </select>
                 </div>
             </div>
             
@@ -111,10 +140,10 @@ require_once '../../includes/header.php';
                     <i class="fas fa-download"></i> Export
                 </button>
                 <div class="dropdown-menu dropdown-menu-right" aria-labelledby="exportDropdown">
-                    <a class="dropdown-item" href="api.php?action=export&format=csv<?php echo $search ? '&search=' . urlencode($search) : ''; ?>">
+                    <a class="dropdown-item" href="api.php?action=export&format=csv<?php echo $search ? '&search=' . urlencode($search) : ''; ?><?php echo isset($is_recurring) ? '&is_fixed=' . $is_recurring : ''; ?>">
                         <i class="fas fa-file-csv"></i> Export as CSV
                     </a>
-                    <a class="dropdown-item" href="api.php?action=export&format=pdf<?php echo $search ? '&search=' . urlencode($search) : ''; ?>">
+                    <a class="dropdown-item" href="api.php?action=export&format=pdf<?php echo $search ? '&search=' . urlencode($search) : ''; ?><?php echo isset($is_recurring) ? '&is_fixed=' . $is_recurring : ''; ?>">
                         <i class="fas fa-file-pdf"></i> Export as PDF
                     </a>
                 </div>
@@ -127,7 +156,7 @@ require_once '../../includes/header.php';
             <thead>
                 <tr>
                     <th>
-                        <a href="?sort=date&order=<?php echo ($sort === 'date' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['type', 'search']); ?>">
+                        <a href="?sort=date&order=<?php echo ($sort === 'date' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['recurring', 'search']); ?>">
                             Date
                             <?php if ($sort === 'date'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -135,7 +164,7 @@ require_once '../../includes/header.php';
                         </a>
                     </th>
                     <th>
-                        <a href="?sort=description&order=<?php echo ($sort === 'description' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['type', 'search']); ?>">
+                        <a href="?sort=description&order=<?php echo ($sort === 'description' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['recurring', 'search']); ?>">
                             Description
                             <?php if ($sort === 'description'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -144,13 +173,14 @@ require_once '../../includes/header.php';
                     </th>
                     <th>Category</th>
                     <th>
-                        <a href="?sort=amount&order=<?php echo ($sort === 'amount' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['type', 'search']); ?>">
+                        <a href="?sort=amount&order=<?php echo ($sort === 'amount' && $order === 'DESC') ? 'asc' : 'desc'; echo buildQueryParams(['recurring', 'search']); ?>">
                             Amount
                             <?php if ($sort === 'amount'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
                             <?php endif; ?>
                         </a>
                     </th>
+                    <th>Recurrence</th>
                     <th>Notes</th>
                     <th>Actions</th>
                 </tr>
@@ -158,7 +188,7 @@ require_once '../../includes/header.php';
             <tbody>
                 <?php if (empty($transactions)): ?>
                     <tr>
-                        <td colspan="6" class="text-center">No incoming transactions found.</td>
+                        <td colspan="7" class="text-center">No incoming transactions found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($transactions as $transaction): ?>
@@ -168,6 +198,9 @@ require_once '../../includes/header.php';
                                 <?php echo htmlspecialchars($transaction['description']); ?>
                                 <?php if ($transaction['is_split']): ?>
                                     <span class="badge badge-info">Split</span>
+                                <?php endif; ?>
+                                <?php if ($transaction['is_fixed'] && $transaction['repeat_interval'] !== 'none'): ?>
+                                    <span class="badge badge-recurring">Recurring</span>
                                 <?php endif; ?>
                             </td>
                             <td>
@@ -181,6 +214,40 @@ require_once '../../includes/header.php';
                             </td>
                             <td class="text-right amount-positive">
                                 <?php echo number_format($transaction['amount'], 2); ?> kr
+                            </td>
+                            <td>
+                                <?php if ($transaction['is_fixed'] && $transaction['repeat_interval'] !== 'none'): ?>
+                                    <span class="badge badge-warning">
+                                        <?php 
+                                        switch ($transaction['repeat_interval']) {
+                                            case 'daily':
+                                                echo 'Daily';
+                                                break;
+                                            case 'weekly':
+                                                echo 'Weekly';
+                                                break;
+                                            case 'monthly':
+                                                echo 'Monthly';
+                                                break;
+                                            case 'quarterly':
+                                                echo 'Quarterly';
+                                                break;
+                                            case 'yearly':
+                                                echo 'Yearly';
+                                                break;
+                                            default:
+                                                echo 'None';
+                                        }
+                                        ?>
+                                    </span>
+                                    <?php if ($transaction['repeat_until']): ?>
+                                        <small class="d-block text-muted">
+                                            Until <?php echo date('M d, Y', strtotime($transaction['repeat_until'])); ?>
+                                        </small>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <span class="text-muted">One-time</span>
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <?php if (!empty($transaction['notes'])): ?>
@@ -242,6 +309,7 @@ require_once '../../includes/header.php';
                                     <td class="text-right amount-positive">
                                         <?php echo number_format($split['amount'], 2); ?> kr
                                     </td>
+                                    <td>-</td>
                                     <td>
                                         <?php if (!empty($split['notes'])): ?>
                                             <?php 
@@ -267,7 +335,7 @@ require_once '../../includes/header.php';
                 <tr>
                     <th colspan="3">Total</th>
                     <th class="text-right amount-positive"><?php echo number_format($total_amount, 2); ?> kr</th>
-                    <th colspan="2"></th>
+                    <th colspan="3"></th>
                 </tr>
             </tfoot>
         </table>
@@ -321,9 +389,14 @@ require_once '../../includes/header.php';
     margin-bottom: 15px;
 }
 
-.col-md-12 {
-    flex: 0 0 100%;
-    max-width: 100%;
+.col-md-8 {
+    flex: 0 0 66.666667%;
+    max-width: 66.666667%;
+}
+
+.col-md-4 {
+    flex: 0 0 33.333333%;
+    max-width: 33.333333%;
 }
 
 .category-badge {
@@ -354,6 +427,33 @@ require_once '../../includes/header.php';
 .split-item i {
     margin-right: 5px;
     color: var(--gray);
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-info {
+    background-color: rgba(52, 152, 219, 0.2);
+    color: var(--primary-dark);
+}
+
+.badge-warning {
+    background-color: rgba(243, 156, 18, 0.2);
+    color: #d35400;
+}
+
+.badge-recurring {
+    background-color: rgba(142, 68, 173, 0.2);
+    color: #8e44ad;
+}
+
+.d-block {
+    display: block;
 }
 
 /* Dropdown styles */
@@ -418,6 +518,17 @@ require_once '../../includes/header.php';
 
 .dropdown-item i {
     margin-right: 8px;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        flex-direction: column;
+    }
+    
+    .col-md-8, .col-md-4 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
 }
 </style>
 

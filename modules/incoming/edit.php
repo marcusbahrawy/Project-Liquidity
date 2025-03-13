@@ -131,6 +131,40 @@ require_once '../../includes/header.php';
                 </div>
             </div>
             
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="is_fixed">Transaction Type</label>
+                    <div class="form-check-inline">
+                        <input type="radio" id="is_fixed_0" name="is_fixed" value="0" class="form-check-input" <?php echo !$transaction['is_fixed'] ? 'checked' : ''; ?>>
+                        <label for="is_fixed_0" class="form-check-label">One-time Income</label>
+                    </div>
+                    <div class="form-check-inline">
+                        <input type="radio" id="is_fixed_1" name="is_fixed" value="1" class="form-check-input" <?php echo $transaction['is_fixed'] ? 'checked' : ''; ?>>
+                        <label for="is_fixed_1" class="form-check-label">Recurring Income</label>
+                    </div>
+                </div>
+                
+                <div class="form-group col-md-6" id="repeat-container" style="display: <?php echo $transaction['is_fixed'] ? 'block' : 'none'; ?>;">
+                    <label for="repeat_interval">Repeat Interval</label>
+                    <select id="repeat_interval" name="repeat_interval" class="form-select">
+                        <option value="none" <?php echo $transaction['repeat_interval'] === 'none' ? 'selected' : ''; ?>>No Repetition</option>
+                        <option value="daily" <?php echo $transaction['repeat_interval'] === 'daily' ? 'selected' : ''; ?>>Daily</option>
+                        <option value="weekly" <?php echo $transaction['repeat_interval'] === 'weekly' ? 'selected' : ''; ?>>Weekly</option>
+                        <option value="monthly" <?php echo $transaction['repeat_interval'] === 'monthly' ? 'selected' : ''; ?>>Monthly</option>
+                        <option value="quarterly" <?php echo $transaction['repeat_interval'] === 'quarterly' ? 'selected' : ''; ?>>Quarterly</option>
+                        <option value="yearly" <?php echo $transaction['repeat_interval'] === 'yearly' ? 'selected' : ''; ?>>Yearly</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row" id="repeat-until-container" style="display: <?php echo ($transaction['is_fixed'] && $transaction['repeat_interval'] !== 'none') ? 'block' : 'none'; ?>;">
+                <div class="form-group col-md-6">
+                    <label for="repeat_until">Repeat Until</label>
+                    <input type="date" id="repeat_until" name="repeat_until" class="form-control datepicker" value="<?php echo $transaction['repeat_until']; ?>">
+                    <small class="form-text text-muted">Leave empty for indefinite repetition</small>
+                </div>
+            </div>
+            
             <div class="form-group">
                 <label for="notes">Notes</label>
                 <textarea id="notes" name="notes" class="form-control" rows="3"><?php echo htmlspecialchars($transaction['notes'] ?? ''); ?></textarea>
@@ -252,6 +286,38 @@ require_once '../../includes/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    <?php if (!$isSplitItem): ?>
+    // Initialize fixed income / recurrence functionality
+    const isFixedInputs = document.querySelectorAll('input[name="is_fixed"]');
+    const repeatContainer = document.getElementById('repeat-container');
+    const repeatIntervalSelect = document.getElementById('repeat_interval');
+    const repeatUntilContainer = document.getElementById('repeat-until-container');
+    
+    // Toggle repeat options based on fixed income selection
+    isFixedInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            if (this.value === '1' && this.checked) {
+                repeatContainer.style.display = 'block';
+                toggleRepeatUntil();
+            } else {
+                repeatContainer.style.display = 'none';
+                repeatUntilContainer.style.display = 'none';
+            }
+        });
+    });
+    
+    // Toggle repeat until field based on repeat interval
+    repeatIntervalSelect.addEventListener('change', toggleRepeatUntil);
+    
+    function toggleRepeatUntil() {
+        if (repeatIntervalSelect.value !== 'none') {
+            repeatUntilContainer.style.display = 'block';
+        } else {
+            repeatUntilContainer.style.display = 'none';
+        }
+    }
+    <?php endif; ?>
+    
     <?php if (!$isSplitItem && !$isSplit): ?>
     // Initialize split functionality
     let splitCounter = 0;
@@ -376,6 +442,20 @@ document.addEventListener('DOMContentLoaded', function() {
     font-size: 18px;
     font-weight: 500;
     margin-bottom: 5px;
+}
+
+.form-check-inline {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 15px;
+}
+
+.form-check-input {
+    margin-right: 5px;
+}
+
+.form-check-label {
+    margin-bottom: 0;
 }
 
 .split-item {

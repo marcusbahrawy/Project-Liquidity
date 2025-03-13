@@ -272,7 +272,15 @@ function debugData() {
         WHERE is_fixed = 1 AND repeat_interval != 'none'
     ");
     $stmt->execute();
-    $debug['recurring_count'] = $stmt->fetch()['count'];
+    $debug['outgoing_recurring_count'] = $stmt->fetch()['count'];
+    
+    // Check recurring income
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) as count FROM incoming 
+        WHERE is_fixed = 1 AND repeat_interval != 'none'
+    ");
+    $stmt->execute();
+    $debug['incoming_recurring_count'] = $stmt->fetch()['count'];
     
     // Get recurring transaction details for inspection
     $stmt = $pdo->prepare("
@@ -282,7 +290,17 @@ function debugData() {
         LIMIT 10
     ");
     $stmt->execute();
-    $debug['recurring_transactions'] = $stmt->fetchAll();
+    $debug['recurring_expenses'] = $stmt->fetchAll();
+    
+    // Get recurring income details for inspection
+    $stmt = $pdo->prepare("
+        SELECT id, description, amount, date, repeat_interval, repeat_until
+        FROM incoming 
+        WHERE is_fixed = 1 AND repeat_interval != 'none'
+        LIMIT 10
+    ");
+    $stmt->execute();
+    $debug['recurring_income'] = $stmt->fetchAll();
     
     // Get initial balance
     $debug['initial_balance'] = getInitialBalance();
@@ -382,6 +400,7 @@ function getTimelineData() {
             FROM incoming 
             WHERE date BETWEEN :start_date AND :end_date
             AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
+            AND (is_fixed = 0 OR repeat_interval = 'none')
             GROUP BY date
         ");
         $stmt->execute([
@@ -396,6 +415,126 @@ function getTimelineData() {
             if (isset($incomeData[$row['date']])) {
                 $incomeData[$row['date']] = (float)$row['total'];
             }
+        }
+        
+        // Handle recurring income transactions
+        // Get all recurring income that might occur in our range
+        $stmt = $pdo->prepare("
+            SELECT id, description, amount, date, repeat_interval, repeat_until
+            FROM incoming 
+            WHERE is_fixed = 1 
+            AND repeat_interval != 'none'
+            AND parent_id IS NULL
+            AND (repeat_until IS NULL OR repeat_until >= :current_date)
+        ");
+        $stmt->execute(['current_date' => $currentDate]);
+        $recurringIncome = $stmt->fetchAll();
+        
+        // Debug data for recurring income
+        $debugRecurringIncome = [];
+        
+        foreach ($recurringIncome as $income) {
+            $startDate = $income['date'];
+            $endDateForIncome = $income['repeat_until'] ? min($income['repeat_until'], $endDate) : $endDate;
+            $interval = $income['repeat_interval'];
+            $amount = (float)$income['amount'];
+            
+            // Check if this is a split transaction
+            $isSplit = false;
+            if ($income['id']) {
+                $splitCheckStmt = $pdo->prepare("
+                    SELECT is_split FROM incoming WHERE id = :id
+                ");
+                $splitCheckStmt->execute(['id' => $income['id']]);
+                $splitResult = $splitCheckStmt->fetch();
+                $isSplit = $splitResult && $splitResult['is_split'] == 1;
+            }
+            
+            // If it's a split transaction, get the splits instead
+            if ($isSplit) {
+                $splitStmt = $pdo->prepare("
+                    SELECT amount FROM incoming WHERE parent_id = :parent_id
+                ");
+                $splitStmt->execute(['parent_id' => $income['id']]);
+                $splits = $splitStmt->fetchAll();
+                
+                // Don't process this recurring income if it's a split parent
+                continue;
+            }
+            
+            // Calculate occurrences using DateTime for better accuracy
+            $date = new DateTime($startDate);
+            $endDateObj = new DateTime($endDateForIncome);
+            $currentDateObj = new DateTime($currentDate);
+            
+            // For debugging
+            $occurrences = [];
+            
+            // If start date is in the past, begin from first occurrence after current date
+            if ($date < $currentDateObj) {
+                // Advance to first occurrence on or after current date
+                while ($date < $currentDateObj) {
+                    switch ($interval) {
+                        case 'daily':
+                            $date->modify('+1 day');
+                            break;
+                        case 'weekly':
+                            $date->modify('+1 week');
+                            break;
+                        case 'monthly':
+                            $date->modify('+1 month');
+                            break;
+                        case 'quarterly':
+                            $date->modify('+3 months');
+                            break;
+                        case 'yearly':
+                            $date->modify('+1 year');
+                            break;
+                    }
+                }
+            }
+            
+            // Now add all occurrences within our range
+            while ($date <= $endDateObj) {
+                $occurrenceDate = $date->format('Y-m-d');
+                
+                // Add to income data if within range
+                if (isset($incomeData[$occurrenceDate])) {
+                    $incomeData[$occurrenceDate] += $amount;
+                    $occurrences[] = $occurrenceDate;
+                }
+                
+                // Advance to next occurrence
+                switch ($interval) {
+                    case 'daily':
+                        $date->modify('+1 day');
+                        break;
+                    case 'weekly':
+                        $date->modify('+1 week');
+                        break;
+                    case 'monthly':
+                        $date->modify('+1 month');
+                        break;
+                    case 'quarterly':
+                        $date->modify('+3 months');
+                        break;
+                    case 'yearly':
+                        $date->modify('+1 year');
+                        break;
+                }
+            }
+            
+            // Add to debug data
+            $debugRecurringIncome[] = [
+                'id' => $income['id'],
+                'description' => $income['description'],
+                'amount' => $amount,
+                'start_date' => $startDate,
+                'end_date' => $endDateForIncome,
+                'interval' => $interval,
+                'occurrences' => $occurrences,
+                'is_split' => $isSplit
+            ];
         }
         
         // Get non-recurring outgoing transactions for the date range
@@ -577,6 +716,7 @@ function getTimelineData() {
                 'currentBalance' => $currentBalance,
                 'transactionSum' => $transactionSum,
                 'recurring_expenses' => $debugRecurring,
+                'recurring_income' => $debugRecurringIncome,
                 'date_range' => [
                     'start' => $currentDate,
                     'end' => $endDate,
@@ -623,19 +763,104 @@ function getDashboardStats() {
         // Current balance is initial balance + all transactions
         $currentBalance = $initialBalance + $transactionSum;
         
-        // MODIFIED: Get upcoming income for the next 30 days, using split transactions
+        // MODIFIED: Get upcoming non-recurring income for the next 30 days, using split transactions
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(amount), 0) as total 
             FROM incoming 
             WHERE date BETWEEN :start_date AND :end_date
             AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
+            AND (is_fixed = 0 OR repeat_interval = 'none')
         ");
         $stmt->execute([
             'start_date' => $currentDate,
             'end_date' => date('Y-m-d', strtotime('+30 days'))
         ]);
         $result = $stmt->fetch();
-        $upcomingIncome = (float)$result['total'];
+        $upcomingIncomeNonRecurring = (float)$result['total'];
+        
+        // Get recurring income for the next 30 days
+        $upcomingIncomeRecurring = 0;
+        $endDate = date('Y-m-d', strtotime('+30 days'));
+        
+        // For recurring transactions, we only count non-split parent transactions
+        $stmt = $pdo->prepare("
+            SELECT id, description, amount, date, repeat_interval, repeat_until, is_split
+            FROM incoming 
+            WHERE is_fixed = 1 
+            AND repeat_interval != 'none'
+            AND parent_id IS NULL
+            AND (repeat_until IS NULL OR repeat_until >= :current_date)
+        ");
+        $stmt->execute(['current_date' => $currentDate]);
+        $recurringIncome = $stmt->fetchAll();
+        
+        foreach ($recurringIncome as $income) {
+            // Skip if it's a split parent - we'll handle split children separately
+            if ($income['is_split'] == 1) {
+                continue;
+            }
+            
+            $startDate = $income['date'];
+            $endDateForIncome = $income['repeat_until'] ? min($income['repeat_until'], $endDate) : $endDate;
+            $interval = $income['repeat_interval'];
+            $amount = (float)$income['amount'];
+            
+            // Calculate occurrences using DateTime
+            $date = new DateTime($startDate);
+            $endDateObj = new DateTime($endDateForIncome);
+            $currentDateObj = new DateTime($currentDate);
+            
+            // If start date is in the past, begin from first occurrence after current date
+            if ($date < $currentDateObj) {
+                // Advance to first occurrence on or after current date
+                while ($date < $currentDateObj) {
+                    switch ($interval) {
+                        case 'daily':
+                            $date->modify('+1 day');
+                            break;
+                        case 'weekly':
+                            $date->modify('+1 week');
+                            break;
+                        case 'monthly':
+                            $date->modify('+1 month');
+                            break;
+                        case 'quarterly':
+                            $date->modify('+3 months');
+                            break;
+                        case 'yearly':
+                            $date->modify('+1 year');
+                            break;
+                    }
+                }
+            }
+            
+            // Now add all occurrences within our range
+            while ($date <= $endDateObj) {
+                $upcomingIncomeRecurring += $amount;
+                
+                // Advance to next occurrence
+                switch ($interval) {
+                    case 'daily':
+                        $date->modify('+1 day');
+                        break;
+                    case 'weekly':
+                        $date->modify('+1 week');
+                        break;
+                    case 'monthly':
+                        $date->modify('+1 month');
+                        break;
+                    case 'quarterly':
+                        $date->modify('+3 months');
+                        break;
+                    case 'yearly':
+                        $date->modify('+1 year');
+                        break;
+                }
+            }
+        }
+        
+        // Total upcoming income
+        $upcomingIncome = $upcomingIncomeNonRecurring + $upcomingIncomeRecurring;
         
         // MODIFIED: Get upcoming non-recurring expenses for the next 30 days, using split transactions
         $stmt = $pdo->prepare("
@@ -750,6 +975,10 @@ function getDashboardStats() {
             'transactionSum' => $transactionSum,
             'currentBalance' => $currentBalance,
             'upcomingIncome' => $upcomingIncome,
+            'upcomingIncomeDetails' => [
+                'nonRecurring' => $upcomingIncomeNonRecurring,
+                'recurring' => $upcomingIncomeRecurring
+            ],
             'upcomingExpenses' => $upcomingExpenses,
             'upcomingExpenseDetails' => [
                 'nonRecurring' => $upcomingExpenseNonRecurring,
