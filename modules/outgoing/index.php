@@ -19,6 +19,9 @@ $is_debt = isset($_GET['is_debt']) ? (int)$_GET['is_debt'] : 0; // Default not s
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
 
+// Current date for future projections
+$currentDate = date('Y-m-d');
+
 // Build the query
 $query = "
     SELECT o.*, c.name as category_name, c.color as category_color
@@ -76,75 +79,150 @@ $stmt = $pdo->prepare("
 $stmt->execute();
 $categories = $stmt->fetchAll();
 
-// Get total outgoing for filtered period
-$total_query = "
-    SELECT SUM(amount) as total
-    FROM outgoing
-    WHERE parent_id IS NULL AND is_debt = :is_debt
-";
+// Calculate totals including future recurring transactions
+$total_amount = 0;
+$fixed_amount = 0;
+$variable_amount = 0;
+$total_with_recurring = 0;
+$fixed_with_recurring = 0;
 
-$total_params = ['is_debt' => $is_debt];
-
-if ($category_id) {
-    $total_query .= " AND category_id = :category_id";
-    $total_params['category_id'] = $category_id;
+// Function to calculate recurring transaction projections
+function calculateRecurringTransactions($transaction, $date_from = null, $date_to = null, $max_projections = 36) {
+    global $currentDate;
+    
+    // Skip if not a recurring transaction
+    if (!$transaction['is_fixed'] || $transaction['repeat_interval'] === 'none') {
+        return [];
+    }
+    
+    // Initialize results array
+    $projections = [];
+    
+    // Determine start date for projections (greater than the original transaction date)
+    $startDate = date('Y-m-d', strtotime($transaction['date'] . ' + 1 day'));
+    
+    // Apply date_from filter if provided
+    if ($date_from && $date_from > $startDate) {
+        $startDate = $date_from;
+    }
+    
+    // Determine end date for projections
+    $endDate = $transaction['repeat_until'] ?? date('Y-m-d', strtotime('+3 years'));
+    
+    // Apply date_to filter if provided
+    if ($date_to && $date_to < $endDate) {
+        $endDate = $date_to;
+    }
+    
+    // Calculate the first projection date after the start date
+    $currentOccurrence = $transaction['date'];
+    
+    // Move to the first occurrence after startDate
+    while ($currentOccurrence < $startDate) {
+        // Calculate next occurrence based on interval
+        switch ($transaction['repeat_interval']) {
+            case 'daily':
+                $currentOccurrence = date('Y-m-d', strtotime($currentOccurrence . ' + 1 day'));
+                break;
+            case 'weekly':
+                $currentOccurrence = date('Y-m-d', strtotime($currentOccurrence . ' + 1 week'));
+                break;
+            case 'monthly':
+                $currentOccurrence = date('Y-m-d', strtotime($currentOccurrence . ' + 1 month'));
+                break;
+            case 'quarterly':
+                $currentOccurrence = date('Y-m-d', strtotime($currentOccurrence . ' + 3 months'));
+                break;
+            case 'yearly':
+                $currentOccurrence = date('Y-m-d', strtotime($currentOccurrence . ' + 1 year'));
+                break;
+        }
+    }
+    
+    // Generate projections until end date (with a maximum to prevent infinite loops)
+    $count = 0;
+    while ($currentOccurrence <= $endDate && $count < $max_projections) {
+        // Skip the original transaction date
+        if ($currentOccurrence != $transaction['date']) {
+            // Create a projection entry
+            $projection = [
+                'date' => $currentOccurrence,
+                'amount' => $transaction['amount'],
+                'is_projection' => true,
+                'is_fixed' => $transaction['is_fixed']
+            ];
+            
+            $projections[] = $projection;
+        }
+        
+        // Calculate next occurrence based on interval
+        switch ($transaction['repeat_interval']) {
+            case 'daily':
+                $currentOccurrence = date('Y-m-d', strtotime($currentOccurrence . ' + 1 day'));
+                break;
+            case 'weekly':
+                $currentOccurrence = date('Y-m-d', strtotime($currentOccurrence . ' + 1 week'));
+                break;
+            case 'monthly':
+                $currentOccurrence = date('Y-m-d', strtotime($currentOccurrence . ' + 1 month'));
+                break;
+            case 'quarterly':
+                $currentOccurrence = date('Y-m-d', strtotime($currentOccurrence . ' + 3 months'));
+                break;
+            case 'yearly':
+                $currentOccurrence = date('Y-m-d', strtotime($currentOccurrence . ' + 1 year'));
+                break;
+        }
+        
+        $count++;
+    }
+    
+    return $projections;
 }
 
-if ($date_from) {
-    $total_query .= " AND date >= :date_from";
-    $total_params['date_from'] = $date_from;
-}
-
-if ($date_to) {
-    $total_query .= " AND date <= :date_to";
-    $total_params['date_to'] = $date_to;
-}
-
-if ($search) {
-    $total_query .= " AND (description LIKE :search OR notes LIKE :search)";
-    $total_params['search'] = "%{$search}%";
-}
-
-if (isset($is_fixed)) {
-    $total_query .= " AND is_fixed = :is_fixed";
-    $total_params['is_fixed'] = $is_fixed;
-}
-
-$stmt = $pdo->prepare($total_query);
-$stmt->execute($total_params);
-$total = $stmt->fetch();
-$total_amount = $total['total'] ?? 0;
-
-// Get fixed vs variable costs breakdowns
-$fixed_query = "
-    SELECT SUM(amount) as total
-    FROM outgoing
-    WHERE parent_id IS NULL AND is_fixed = 1 AND is_debt = :is_debt
-";
-
-$variable_query = "
-    SELECT SUM(amount) as total
-    FROM outgoing
-    WHERE parent_id IS NULL AND is_fixed = 0 AND is_debt = :is_debt
-";
-
-// Apply the same filters as main query
-foreach (['category_id', 'date_from', 'date_to', 'search'] as $param) {
-    if (isset($$param) && !empty($$param)) {
-        $fixed_query .= " AND " . ($param === 'search' ? "(description LIKE :search OR notes LIKE :search)" : "$param = :$param");
-        $variable_query .= " AND " . ($param === 'search' ? "(description LIKE :search OR notes LIKE :search)" : "$param = :$param");
+// Calculate totals and recurring projections
+foreach ($transactions as $transaction) {
+    // Add to the regular total
+    $total_amount += $transaction['amount'];
+    
+    // Add to fixed or variable totals
+    if ($transaction['is_fixed']) {
+        $fixed_amount += $transaction['amount'];
+    } else {
+        $variable_amount += $transaction['amount'];
+    }
+    
+    // Calculate recurring transactions for future projections
+    if ($transaction['is_fixed'] && $transaction['repeat_interval'] != 'none') {
+        // Get a reasonable projection date (1 year ahead)
+        $projection_end = date('Y-m-d', strtotime('+1 year'));
+        
+        // If there's a specific repeat_until date, use that instead
+        if ($transaction['repeat_until'] && $transaction['repeat_until'] < $projection_end) {
+            $projection_end = $transaction['repeat_until'];
+        }
+        
+        // If date_to is specified, use that as the limit
+        if ($date_to && $date_to < $projection_end) {
+            $projection_end = $date_to;
+        }
+        
+        // Calculate projections
+        $projections = calculateRecurringTransactions($transaction, $date_from, $projection_end);
+        
+        // Add projections to the totals
+        foreach ($projections as $projection) {
+            $total_with_recurring += $projection['amount'];
+            if ($projection['is_fixed']) {
+                $fixed_with_recurring += $projection['amount'];
+            }
+        }
     }
 }
 
-$stmt = $pdo->prepare($fixed_query);
-$stmt->execute($total_params);
-$fixed_total = $stmt->fetch();
-$fixed_amount = $fixed_total['total'] ?? 0;
-
-$stmt = $pdo->prepare($variable_query);
-$stmt->execute($total_params);
-$variable_total = $stmt->fetch();
-$variable_amount = $variable_total['total'] ?? 0;
+// Total including recurring projections
+$total_with_recurring += $total_amount;
+$fixed_with_recurring += $fixed_amount;
 
 // Include header
 require_once '../../includes/header.php';
@@ -252,10 +330,19 @@ require_once '../../includes/header.php';
 <div class="stats-row mb-4">
     <div class="stat-card">
         <div class="stat-value"><?php echo number_format($total_amount, 2); ?> kr</div>
-        <div class="stat-label">Total <?php echo $is_debt ? 'Debt Payments' : 'Expenses'; ?></div>
+        <div class="stat-label">Current <?php echo $is_debt ? 'Debt Payments' : 'Expenses'; ?></div>
     </div>
     
     <?php if (!$is_debt): ?>
+    <div class="stat-card">
+        <div class="stat-value"><?php echo number_format($total_with_recurring, 2); ?> kr</div>
+        <div class="stat-label">With Future Recurrences</div>
+        <div class="stat-trend">
+            <i class="fas fa-calendar-alt"></i>
+            Includes future recurring transactions
+        </div>
+    </div>
+    
     <div class="stat-card">
         <div class="stat-value"><?php echo number_format($fixed_amount, 2); ?> kr</div>
         <div class="stat-label">Fixed Costs</div>
@@ -268,17 +355,21 @@ require_once '../../includes/header.php';
         <div class="stat-percent"><?php echo $total_amount > 0 ? round(($variable_amount / $total_amount) * 100) : 0; ?>%</div>
     </div>
     <?php endif; ?>
-    
-    <div class="stat-card">
-        <div class="stat-value"><?php echo count($transactions); ?></div>
-        <div class="stat-label">Transactions</div>
-    </div>
 </div>
+
+<!-- Recurring Info Alert -->
+<?php if (!$is_debt && $total_with_recurring > $total_amount): ?>
+<div class="alert alert-info mb-4">
+    <i class="fas fa-info-circle"></i>
+    <strong>Recurring Transactions:</strong> Your totals, charts, and projections include <?php echo number_format($total_with_recurring - $total_amount, 2); ?> kr 
+    in future recurring transactions that are shown only once in the list below.
+</div>
+<?php endif; ?>
 
 <!-- Transactions Table -->
 <div class="card">
     <div class="card-header">
-        <div class="card-title"><?php echo $is_debt ? 'Debt Payments' : 'Outgoing Transactions'; ?></div>
+        <div class="card-title"><?php echo $is_debt ? 'Debt Payments' : 'Outgoing Transactions'; ?> (<?php echo count($transactions); ?>)</div>
         <div class="card-actions">
             <div class="dropdown">
                 <button class="btn btn-light btn-sm dropdown-toggle" type="button" id="exportDropdown" data-toggle="dropdown">
@@ -345,6 +436,9 @@ require_once '../../includes/header.php';
                                 <?php echo htmlspecialchars($transaction['description']); ?>
                                 <?php if ($transaction['is_split']): ?>
                                     <span class="badge badge-info">Split</span>
+                                <?php endif; ?>
+                                <?php if ($transaction['is_fixed'] && $transaction['repeat_interval'] !== 'none'): ?>
+                                    <span class="badge badge-recurring">Recurring</span>
                                 <?php endif; ?>
                             </td>
                             <td>
@@ -471,10 +565,17 @@ require_once '../../includes/header.php';
             </tbody>
             <tfoot>
                 <tr>
-                    <th colspan="<?php echo $is_debt ? '4' : '5'; ?>">Total</th>
+                    <th colspan="<?php echo $is_debt ? '4' : '5'; ?>">Current Total (Displayed Transactions)</th>
                     <th class="text-right amount-negative"><?php echo number_format($total_amount, 2); ?> kr</th>
                     <th colspan="2"></th>
                 </tr>
+                <?php if (!$is_debt && $total_with_recurring > $total_amount): ?>
+                <tr>
+                    <th colspan="<?php echo $is_debt ? '4' : '5'; ?>">Projected Total (Including Recurring Transactions)</th>
+                    <th class="text-right amount-negative"><?php echo number_format($total_with_recurring, 2); ?> kr</th>
+                    <th colspan="2"></th>
+                </tr>
+                <?php endif; ?>
             </tfoot>
         </table>
     </div>
@@ -582,6 +683,18 @@ require_once '../../includes/header.php';
     font-weight: 500;
 }
 
+.stat-card .stat-trend {
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    margin-top: 5px;
+    color: var(--gray);
+}
+
+.stat-card .stat-trend i {
+    margin-right: 5px;
+}
+
 .category-badge {
     display: inline-block;
     padding: 4px 8px;
@@ -616,6 +729,11 @@ require_once '../../includes/header.php';
 .badge-warning {
     background-color: rgba(243, 156, 18, 0.2);
     color: #d35400;
+}
+
+.badge-recurring {
+    background-color: rgba(142, 68, 173, 0.2);
+    color: #8e44ad;
 }
 
 .amount-negative {
@@ -704,6 +822,23 @@ require_once '../../includes/header.php';
     margin-right: 8px;
 }
 
+/* Alert styles */
+.alert-info {
+    background-color: rgba(52, 152, 219, 0.1);
+    border-left: 4px solid var(--primary);
+    color: var(--primary-dark);
+    padding: 15px;
+    border-radius: 4px;
+}
+
+.alert-info i {
+    margin-right: 8px;
+}
+
+.d-block {
+    display: block;
+}
+
 @media (max-width: 768px) {
     .module-header {
         flex-direction: column;
@@ -743,3 +878,4 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
 // Include footer
 require_once '../../includes/footer.php';
+?>

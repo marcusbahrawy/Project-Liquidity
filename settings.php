@@ -25,40 +25,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         
         // Update initial balance
-        if (isset($_POST['initial_balance'])) {
-            $initialBalance = filter_var($_POST['initial_balance'], FILTER_VALIDATE_FLOAT);
-            
-            $stmt = $pdo->prepare("
-                INSERT INTO settings (setting_key, setting_value)
-                VALUES ('initial_balance', :value)
-                ON DUPLICATE KEY UPDATE setting_value = :value
-            ");
-            $stmt->execute(['value' => $initialBalance]);
-        }
+if (isset($_POST['initial_balance'])) {
+    $initialBalance = filter_var($_POST['initial_balance'], FILTER_VALIDATE_FLOAT);
+    
+    $stmt = $pdo->prepare("
+        INSERT INTO settings (setting_key, setting_value)
+        VALUES ('initial_balance', :insert_value)
+        ON DUPLICATE KEY UPDATE setting_value = :update_value
+    ");
+    $stmt->execute([
+        'insert_value' => $initialBalance,
+        'update_value' => $initialBalance
+    ]);
+}
         
         // Update currency
-        if (isset($_POST['currency'])) {
-            $currency = trim($_POST['currency']);
-            
-            $stmt = $pdo->prepare("
-                INSERT INTO settings (setting_key, setting_value)
-                VALUES ('currency', :value)
-                ON DUPLICATE KEY UPDATE setting_value = :value
-            ");
-            $stmt->execute(['value' => $currency]);
-        }
-        
-        // Update date format
-        if (isset($_POST['date_format'])) {
-            $dateFormat = trim($_POST['date_format']);
-            
-            $stmt = $pdo->prepare("
-                INSERT INTO settings (setting_key, setting_value)
-                VALUES ('date_format', :value)
-                ON DUPLICATE KEY UPDATE setting_value = :value
-            ");
-            $stmt->execute(['value' => $dateFormat]);
-        }
+if (isset($_POST['currency'])) {
+    $currency = trim($_POST['currency']);
+    
+    $stmt = $pdo->prepare("
+        INSERT INTO settings (setting_key, setting_value)
+        VALUES ('currency', :insert_value)
+        ON DUPLICATE KEY UPDATE setting_value = :update_value
+    ");
+    $stmt->execute([
+        'insert_value' => $currency,
+        'update_value' => $currency
+    ]);
+}
+
+// Update date format
+if (isset($_POST['date_format'])) {
+    $dateFormat = trim($_POST['date_format']);
+    
+    $stmt = $pdo->prepare("
+        INSERT INTO settings (setting_key, setting_value)
+        VALUES ('date_format', :insert_value)
+        ON DUPLICATE KEY UPDATE setting_value = :update_value
+    ");
+    $stmt->execute([
+        'insert_value' => $dateFormat,
+        'update_value' => $dateFormat
+    ]);
+}
         
         // Commit transaction
         $pdo->commit();

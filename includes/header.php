@@ -1104,7 +1104,19 @@ function isActive($path, $exact = false) {
                             <span>Debt</span>
                         </a>
                     </li>
+                    <li>
+                        <a href="/modules/categories/index.php" class="<?php echo isActive('categories') ? 'active' : ''; ?>">
+                            <i class="fas fa-tags"></i>
+                            <span>Categories</span>
+                        </a>
+                    </li>
                     <li class="sidebar-divider"></li>
+                    <li>
+                        <a href="/settings.php" class="<?php echo isActive('settings.php', true) ? 'active' : ''; ?>">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
                     <li>
                         <a href="/auth/logout.php">
                             <i class="fas fa-sign-out-alt"></i>

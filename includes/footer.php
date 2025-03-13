@@ -499,6 +499,8 @@
     <script src="/assets/js/outgoing.js"></script>
     <?php elseif ($current_dir === 'debt'): ?>
     <script src="/assets/js/debt.js"></script>
+    <?php elseif ($current_dir === 'categories'): ?>
+    <script src="/assets/js/categories.js"></script>
     <?php endif; ?>
     
     <!-- Delete functionality fix -->
