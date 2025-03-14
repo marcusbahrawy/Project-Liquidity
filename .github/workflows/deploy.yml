@@ -1,0 +1,23 @@
+name: FTP Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  ftp-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Upload to FTP server
+      uses: SamKirkland/FTP-Deploy-Action@4.1.0
+      with:
+        ftp-server: ftp.likviditet.illeris.no
+        ftp-username: illeris@likviditet.illeris.no
+        ftp-password: C.BHMVR0gu]b
+        local-dir: ./path/to/your/build
+        server-dir: /path/on/ftp/server

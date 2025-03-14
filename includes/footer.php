@@ -531,5 +531,8 @@
         });
     });
     </script>
+<footer>
+    <p>&copy; <?php echo date("Y"); ?> Illeris Web AS. All rights reserved.</p>
+</footer>
 </body>
 </html>
