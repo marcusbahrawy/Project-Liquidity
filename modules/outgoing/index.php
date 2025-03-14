@@ -14,6 +14,8 @@ $search = isset($_GET['search']) ? trim($_GET['search']) : null;
 $is_debt = isset($_GET['is_debt']) ? (int)$_GET['is_debt'] : 0; // Default not showing debt
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
+// Add recurring filter parameter
+$is_recurring = isset($_GET['recurring']) ? (int)$_GET['recurring'] : null;
 
 // Initialize transactions array
 $transactions = [];
@@ -29,13 +31,22 @@ if (!empty($search)) {
         WHERE o.parent_id IS NULL 
         AND o.is_debt = ?
         AND (o.description LIKE ? OR o.notes LIKE ?)
-        ORDER BY o.{$sort} {$order}
     ";
+    
+    $params = [$is_debt, "%{$search}%", "%{$search}%"];
+    
+    // Add recurring filter if set
+    if (isset($is_recurring)) {
+        $query .= " AND o.is_fixed = ?";
+        $params[] = $is_recurring;
+    }
+    
+    // Add order by clause
+    $query .= " ORDER BY o.{$sort} {$order}";
     
     // Execute with positional parameters
     $stmt = $pdo->prepare($query);
-    $searchParam = "%{$search}%";
-    $stmt->execute([$is_debt, $searchParam, $searchParam]);
+    $stmt->execute($params);
     $transactions = $stmt->fetchAll();
 } else {
     // Query without search
@@ -45,12 +56,22 @@ if (!empty($search)) {
         LEFT JOIN categories c ON o.category_id = c.id
         WHERE o.parent_id IS NULL
         AND o.is_debt = ?
-        ORDER BY o.{$sort} {$order}
     ";
+    
+    $params = [$is_debt];
+    
+    // Add recurring filter if set
+    if (isset($is_recurring)) {
+        $query .= " AND o.is_fixed = ?";
+        $params[] = $is_recurring;
+    }
+    
+    // Add order by clause
+    $query .= " ORDER BY o.{$sort} {$order}";
     
     // Execute with debt parameter only
     $stmt = $pdo->prepare($query);
-    $stmt->execute([$is_debt]);
+    $stmt->execute($params);
     $transactions = $stmt->fetchAll();
 }
 
@@ -99,7 +120,7 @@ require_once '../../includes/header.php';
             <input type="hidden" name="is_debt" value="<?php echo $is_debt; ?>">
             
             <div class="form-row">
-                <div class="form-group col-md-12">
+                <div class="form-group col-md-8">
                     <label for="search">Search</label>
                     <div class="search-container">
                         <input type="text" id="search" name="search" class="form-control" placeholder="Search description or notes..." value="<?php echo htmlspecialchars($search ?? ''); ?>">
@@ -112,6 +133,16 @@ require_once '../../includes/header.php';
                             </a>
                         <?php endif; ?>
                     </div>
+                </div>
+                
+                <!-- Add Transaction Type Filter -->
+                <div class="form-group col-md-4">
+                    <label for="recurring">Transaction Type</label>
+                    <select id="recurring" name="recurring" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Types</option>
+                        <option value="0" <?php echo isset($is_recurring) && $is_recurring === 0 ? 'selected' : ''; ?>>Variable Cost</option>
+                        <option value="1" <?php echo isset($is_recurring) && $is_recurring === 1 ? 'selected' : ''; ?>>Fixed Cost</option>
+                    </select>
                 </div>
             </div>
             
@@ -131,10 +162,10 @@ require_once '../../includes/header.php';
                     <i class="fas fa-download"></i> Export
                 </button>
                 <div class="dropdown-menu dropdown-menu-right" aria-labelledby="exportDropdown">
-                    <a class="dropdown-item" href="api.php?action=export&format=csv&is_debt=<?php echo $is_debt; echo $search ? '&search=' . urlencode($search) : ''; ?>">
+                    <a class="dropdown-item" href="api.php?action=export&format=csv&is_debt=<?php echo $is_debt; echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&is_fixed=' . $is_recurring : ''; ?>">
                         <i class="fas fa-file-csv"></i> Export as CSV
                     </a>
-                    <a class="dropdown-item" href="api.php?action=export&format=pdf&is_debt=<?php echo $is_debt; echo $search ? '&search=' . urlencode($search) : ''; ?>">
+                    <a class="dropdown-item" href="api.php?action=export&format=pdf&is_debt=<?php echo $is_debt; echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&is_fixed=' . $is_recurring : ''; ?>">
                         <i class="fas fa-file-pdf"></i> Export as PDF
                     </a>
                 </div>
@@ -147,7 +178,7 @@ require_once '../../includes/header.php';
             <thead>
                 <tr>
                     <th>
-                        <a href="?is_debt=<?php echo $is_debt; ?>&sort=date&order=<?php echo ($sort === 'date' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
+                        <a href="?is_debt=<?php echo $is_debt; ?>&sort=date&order=<?php echo ($sort === 'date' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&recurring=' . $is_recurring : ''; ?>">
                             Date
                             <?php if ($sort === 'date'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -155,7 +186,7 @@ require_once '../../includes/header.php';
                         </a>
                     </th>
                     <th>
-                        <a href="?is_debt=<?php echo $is_debt; ?>&sort=description&order=<?php echo ($sort === 'description' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
+                        <a href="?is_debt=<?php echo $is_debt; ?>&sort=description&order=<?php echo ($sort === 'description' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&recurring=' . $is_recurring : ''; ?>">
                             Description
                             <?php if ($sort === 'description'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -167,7 +198,7 @@ require_once '../../includes/header.php';
                     <th>Type</th>
                     <?php endif; ?>
                     <th>
-                        <a href="?is_debt=<?php echo $is_debt; ?>&sort=amount&order=<?php echo ($sort === 'amount' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; ?>">
+                        <a href="?is_debt=<?php echo $is_debt; ?>&sort=amount&order=<?php echo ($sort === 'amount' && $order === 'DESC') ? 'asc' : 'desc'; echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&recurring=' . $is_recurring : ''; ?>">
                             Amount
                             <?php if ($sort === 'amount'): ?>
                                 <i class="fas fa-sort-<?php echo ($order === 'DESC') ? 'down' : 'up'; ?>"></i>
@@ -386,6 +417,16 @@ require_once '../../includes/header.php';
     max-width: 100%;
 }
 
+.col-md-8 {
+    flex: 0 0 66.666667%;
+    max-width: 66.666667%;
+}
+
+.col-md-4 {
+    flex: 0 0 33.333333%;
+    max-width: 33.333333%;
+}
+
 .category-badge {
     display: inline-block;
     padding: 4px 8px;
@@ -525,6 +566,15 @@ require_once '../../includes/header.php';
     
     .module-actions {
         margin-top: 15px;
+    }
+    
+    .form-row {
+        flex-direction: column;
+    }
+    
+    .col-md-8, .col-md-4 {
+        flex: 0 0 100%;
+        max-width: 100%;
     }
 }
 </style>
