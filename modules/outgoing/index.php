@@ -14,8 +14,8 @@ $search = isset($_GET['search']) ? trim($_GET['search']) : null;
 $is_debt = isset($_GET['is_debt']) ? (int)$_GET['is_debt'] : 0; // Default not showing debt
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
-// Add recurring filter parameter
-$is_recurring = isset($_GET['recurring']) ? (int)$_GET['recurring'] : null;
+// Add recurring filter parameter - fixed to check if it's empty
+$is_recurring = (isset($_GET['recurring']) && $_GET['recurring'] !== '') ? (int)$_GET['recurring'] : null;
 
 // Initialize transactions array
 $transactions = [];
