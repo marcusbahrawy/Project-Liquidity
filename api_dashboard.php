@@ -57,6 +57,7 @@ function getInitialBalance() {
         }
     } catch (PDOException $e) {
         // If there's an error or the settings table doesn't exist yet
+        error_log("Error getting initial balance: " . $e->getMessage());
         return 0;
     }
     
@@ -72,6 +73,9 @@ function getTransactionsData() {
     // Get days parameter - how many days into the future to look
     $days = isset($_GET['days']) ? (int)$_GET['days'] : 30;
     
+    // Debug log
+    error_log("Fetching transactions data for {$days} days");
+    
     // Validate days parameter
     if ($days <= 0 || $days > 365) {
         $days = 30; // Default to 30 days if invalid
@@ -81,7 +85,11 @@ function getTransactionsData() {
         $currentDate = date('Y-m-d');
         $endDate = date('Y-m-d', strtotime("+$days days"));
         
+        // Debug log
+        error_log("Date range: {$currentDate} to {$endDate}");
+        
         // Get transactions for the selected period - fetch parent transactions only
+        // IMPORTANT: No LIMIT clauses to ensure we get all transactions
         $stmt = $pdo->prepare("
             (SELECT 'incoming' as type, i.id, i.description, i.amount, i.date, i.is_split, c.name as category, c.color
              FROM incoming i
@@ -89,8 +97,7 @@ function getTransactionsData() {
              WHERE i.date BETWEEN :current_date_inc AND :end_date_inc 
              AND i.parent_id IS NULL
              AND (i.is_fixed = 0 OR i.repeat_interval = 'none')
-             ORDER BY i.date ASC
-             LIMIT 40)
+             ORDER BY i.date ASC)
             UNION ALL
             (SELECT 'outgoing' as type, o.id, o.description, o.amount, o.date, o.is_split, c.name as category, c.color
              FROM outgoing o
@@ -98,10 +105,8 @@ function getTransactionsData() {
              WHERE o.date BETWEEN :current_date_out AND :end_date_out 
              AND o.parent_id IS NULL
              AND (o.is_fixed = 0 OR o.repeat_interval = 'none')
-             ORDER BY o.date ASC
-             LIMIT 40)
+             ORDER BY o.date ASC)
             ORDER BY date ASC
-            LIMIT 40
         ");
         $stmt->execute([
             'current_date_inc' => $currentDate,
@@ -110,6 +115,8 @@ function getTransactionsData() {
             'end_date_out' => $endDate
         ]);
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        error_log("Found " . count($transactions) . " non-recurring transactions");
         
         // Get recurring INCOMING transactions
         $stmt = $pdo->prepare("
@@ -125,6 +132,8 @@ function getTransactionsData() {
         $stmt->execute(['current_date' => $currentDate]);
         $recurringIncome = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
+        error_log("Found " . count($recurringIncome) . " recurring income transactions");
+        
         // Get recurring OUTGOING transactions
         $stmt = $pdo->prepare("
             SELECT o.id, o.description, o.amount, o.date, o.is_split, o.repeat_interval, 
@@ -138,6 +147,8 @@ function getTransactionsData() {
         ");
         $stmt->execute(['current_date' => $currentDate]);
         $recurringExpenses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        error_log("Found " . count($recurringExpenses) . " recurring expense transactions");
 
         // Add virtual transactions for recurring income
         foreach ($recurringIncome as $income) {
@@ -306,6 +317,8 @@ function getTransactionsData() {
             return strtotime($a['date']) - strtotime($b['date']);
         });
         
+        error_log("Total transactions after adding recurring: " . count($transactions));
+        
         // Process transactions to include split items
         $organizedTransactions = [];
         
@@ -346,6 +359,8 @@ function getTransactionsData() {
             
             $organizedTransactions[] = $organizedTransaction;
         }
+        
+        error_log("Final organized transactions: " . count($organizedTransactions));
         
         // Get category spending breakdown
         $stmt = $pdo->prepare("
@@ -429,6 +444,10 @@ function getTransactionsData() {
             'stats' => $stats
         ]);
     } catch (PDOException $e) {
+        error_log("Error in getTransactionsData: " . $e->getMessage());
+        jsonResponse(false, 'Error retrieving transactions data: ' . $e->getMessage());
+    } catch (Exception $e) {
+        error_log("General error in getTransactionsData: " . $e->getMessage());
         jsonResponse(false, 'Error retrieving transactions data: ' . $e->getMessage());
     }
 }
@@ -523,6 +542,7 @@ function debugData() {
     // Sample of some data
     $debug['current_date'] = $currentDate;
     $debug['php_version'] = phpversion();
+    $debug['server_info'] = $_SERVER;
     
     jsonResponse(true, 'Debug data retrieved', $debug);
 }
@@ -924,6 +944,10 @@ function getTimelineData() {
         
         jsonResponse(true, 'Timeline data retrieved successfully', $chartData);
     } catch (PDOException $e) {
+        error_log("Error in getTimelineData: " . $e->getMessage());
+        jsonResponse(false, 'Error retrieving timeline data: ' . $e->getMessage());
+    } catch (Exception $e) {
+        error_log("General error in getTimelineData: " . $e->getMessage());
         jsonResponse(false, 'Error retrieving timeline data: ' . $e->getMessage());
     }
 }
@@ -1321,6 +1345,10 @@ function getDashboardStats() {
         
         jsonResponse(true, 'Dashboard stats retrieved successfully', $stats);
     } catch (PDOException $e) {
+        error_log("Error in getDashboardStats: " . $e->getMessage());
+        jsonResponse(false, 'Error retrieving dashboard stats: ' . $e->getMessage());
+    } catch (Exception $e) {
+        error_log("General error in getDashboardStats: " . $e->getMessage());
         jsonResponse(false, 'Error retrieving dashboard stats: ' . $e->getMessage());
     }
 }
@@ -1329,7 +1357,17 @@ function getDashboardStats() {
  * Send JSON response
  */
 function jsonResponse($success, $message, $data = []) {
+    // Add debug info
+    $data['debug_info'] = [
+        'timestamp' => date('Y-m-d H:i:s'),
+        'php_version' => phpversion(),
+        'memory_usage' => memory_get_usage(true),
+    ];
+    
     header('Content-Type: application/json');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    
     echo json_encode([
         'success' => $success,
         'message' => $message,
