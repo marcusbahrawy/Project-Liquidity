@@ -13,7 +13,7 @@ require_once 'config/database.php';
 if (!isset($_GET['action'])) {
     jsonResponse(false, 'No action specified');
 }
-
+//Dette er en testkommentar
 $action = $_GET['action'];
 
 // Handle different actions
