@@ -13,7 +13,8 @@ require_once '../../includes/functions.php';
 $search = isset($_GET['search']) ? trim($_GET['search']) : null;
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
-$is_recurring = isset($_GET['recurring']) ? (int)$_GET['recurring'] : null;
+// Fixed to check if recurring is empty string
+$is_recurring = (isset($_GET['recurring']) && $_GET['recurring'] !== '') ? (int)$_GET['recurring'] : null;
 
 // Initialize transactions array
 $transactions = [];
