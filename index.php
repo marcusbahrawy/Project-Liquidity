@@ -119,18 +119,15 @@ $stmt = $pdo->prepare("
      LEFT JOIN categories c ON i.category_id = c.id
      WHERE i.date BETWEEN :current_date_inc AND :end_date_inc 
      AND i.parent_id IS NULL
-     ORDER BY i.date ASC
-     LIMIT 15)
+     ORDER BY i.date ASC)
     UNION ALL
     (SELECT 'outgoing' as type, o.id, o.description, o.amount, o.date, o.is_split, c.name as category, c.color
      FROM outgoing o
      LEFT JOIN categories c ON o.category_id = c.id
      WHERE o.date BETWEEN :current_date_out AND :end_date_out 
      AND o.parent_id IS NULL
-     ORDER BY o.date ASC
-     LIMIT 15)
+     ORDER BY o.date ASC)
     ORDER BY date ASC
-    LIMIT 15
 ");
 $stmt->execute([
     'current_date_inc' => $currentDate,
@@ -243,11 +240,14 @@ require_once 'includes/header.php';
     </div>
 </div>
 
-<!-- Settings Link -->
+<!-- Settings and Debug Controls -->
 <div class="mb-4 text-right">
     <a href="settings.php" class="btn btn-light btn-sm">
         <i class="fas fa-cog"></i> Settings
     </a>
+    <button id="clear-cache-btn" class="btn btn-sm btn-light" style="margin-left: 10px;">
+        <i class="fas fa-sync"></i> Refresh Data
+    </button>
 </div>
 
 <!-- Liquidity Timeline Chart -->
@@ -444,6 +444,40 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get the timeline range dropdown
     const timelineRange = document.getElementById('timelineRange');
     
+    // Add clear cache button functionality
+    document.getElementById('clear-cache-btn').addEventListener('click', function() {
+        // Force a clean reload of data
+        const days = document.getElementById('timelineRange').value;
+        const cacheBuster = new Date().getTime();
+        
+        // Show loading indicator
+        document.getElementById('transactions-loading').style.display = 'block';
+        
+        console.log("Forcing data refresh...");
+        
+        fetch(`/api_dashboard.php?action=transactions&days=${days}&_=${cacheBuster}`)
+            .then(response => {
+                console.log(`API response status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    console.log(`Refreshed data - received ${data.data.transactions.length} transactions`);
+                    updateTransactionsList(data.data.transactions);
+                    updateStatsCards(data.data.stats);
+                } else {
+                    console.error('Error fetching transactions:', data.message);
+                }
+                
+                // Hide loading indicators
+                document.getElementById('transactions-loading').style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Error fetching transactions:', error);
+                document.getElementById('transactions-loading').style.display = 'none';
+            });
+    });
+    
     // Add event listener to update transactions when range changes
     if (timelineRange) {
         timelineRange.addEventListener('change', function() {
@@ -463,11 +497,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show loading indicators
         document.getElementById('transactions-loading').style.display = 'block';
         
+        // Add a cache-busting parameter to prevent browser caching
+        const cacheBuster = new Date().getTime();
+        
+        // Log what we're fetching
+        console.log(`Fetching transactions for ${days} days`);
+        
         // Fetch updated transactions
-        fetch(`/api_dashboard.php?action=transactions&days=${days}`)
-            .then(response => response.json())
+        fetch(`/api_dashboard.php?action=transactions&days=${days}&_=${cacheBuster}`)
+            .then(response => {
+                // Log response status
+                console.log(`API response status: ${response.status}`);
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
+                    // Log number of transactions
+                    console.log(`Received ${data.data.transactions.length} transactions`);
+                    
                     // Update transaction UI
                     updateTransactionsList(data.data.transactions);
                     
