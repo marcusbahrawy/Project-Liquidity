@@ -10,14 +10,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Upload to FTP server
-      uses: SamKirkland/FTP-Deploy-Action@4.1.0
-      with:
-        ftp-server: ftp.likviditet.illeris.no
-        ftp-username: illeris@likviditet.illeris.no
-        ftp-password: C.BHMVR0gu]b
-        local-dir: ./path/to/your/build
-        server-dir: /path/on/ftp/server
+      - name: Upload to FTP server
+        uses: SamKirkland/FTP-Deploy-Action@4.1.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./
+          server-dir: /home4/likviditetilleri/public_html
