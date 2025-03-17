@@ -1,4 +1,4 @@
-name: FTP Deploy
+name: SFTP Deploy
 
 on:
   push:
@@ -6,21 +6,19 @@ on:
       - main
 
 jobs:
-  ftp-deploy:
+  sftp-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Upload to FTP server
-        uses: SamKirkland/FTP-Deploy-Action@4.1.0
+      - name: Deploy to Server
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./
-          server-dir: public_html/
-          protocol: ftps
-          dangerous-clean-slate: true
-          state-name: .ftp-deploy-sync-state.json
+          local_path: './*'
+          remote_path: 'public_html/'
+          delete: true
