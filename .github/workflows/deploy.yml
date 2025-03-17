@@ -21,6 +21,6 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./
           server-dir: public_html/
-          protocol: sftp
+          protocol: ftps
           dangerous-clean-slate: true
           state-name: .ftp-deploy-sync-state.json
