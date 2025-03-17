@@ -21,3 +21,6 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./
           server-dir: /public_html/
+          dangerous-clean-slate: true
+          timeout: 60000
+          retries: 3
