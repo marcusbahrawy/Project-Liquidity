@@ -20,7 +20,9 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./
-          server-dir: /home4/likviditetilleri/public_html/
+          server-dir: public_html/
           dangerous-clean-slate: true
           timeout: 60000
           retries: 3
+          protocol: ftp
+          state-name: .ftp-deploy-sync-state.json
