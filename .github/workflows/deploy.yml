@@ -1,4 +1,4 @@
-name: FTP Deploy
+name: SFTP Deploy
 
 on:
   push:
@@ -6,20 +6,20 @@ on:
       - main
 
 jobs:
-  ftp-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Upload to FTP server
-        uses: SamKirkland/FTP-Deploy-Action@4.1.0
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./
-          server-dir: public_html/
-          port: 21
-          protocol: ftp
+      - name: Deploy to Server
+        uses: easingthemes/ssh-deploy@main
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-avzr --delete"
+          SOURCE: "./"
+          REMOTE_HOST: ${{ secrets.FTP_SERVER }}
+          REMOTE_USER: ${{ secrets.FTP_USERNAME }}
+          TARGET: "public_html/"
+          PORT: "22"
