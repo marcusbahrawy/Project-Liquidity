@@ -16,11 +16,11 @@ jobs:
       - name: Deploy to Server
         uses: easingthemes/ssh-deploy@main
         with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          sshPrivateKey: ${{ secrets.SSH_PRIVATE_KEY }}
           ARGS: "-avzr --delete"
           SOURCE: "./"
           REMOTE_HOST: ${{ secrets.FTP_SERVER }}
           REMOTE_USER: ${{ secrets.FTP_USERNAME }}
           TARGET: "public_html/"
-          PORT: "22"
+          REMOTE_PORT: "22"
           SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
