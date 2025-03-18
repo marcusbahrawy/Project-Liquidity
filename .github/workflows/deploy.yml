@@ -1,26 +1,20 @@
-name: SFTP Deploy
+name: Deploy to cPanel
 
 on:
   push:
-    branches:
-      - main
+    branches: [ dev ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Deploy to Server
-        uses: easingthemes/ssh-deploy@main
+      - uses: actions/checkout@v3
+      
+      - name: Deploy to cPanel
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
-          sshPrivateKey: ${{ secrets.SSH_PRIVATE_KEY }}
-          ARGS: "-avzr --delete"
-          SOURCE: "./"
-          REMOTE_HOST: ${{ secrets.FTP_SERVER }}
-          REMOTE_USER: ${{ secrets.FTP_USERNAME }}
-          TARGET: "public_html/"
-          REMOTE_PORT: "22"
-          SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./
+          server-dir: public_html/
