@@ -207,7 +207,9 @@ require_once '../../includes/header.php';
                         </a>
                     </div>
                 <?php else: ?>
-                    <canvas id="paymentsChart" height="250"></canvas>
+                    <?php if (!empty($chartLabels) && !empty($chartData)): ?>
+                        <canvas id="paymentsChart" height="250"></canvas>
+                    <?php endif; ?>
                     
                     <div class="payment-list">
                         <h3>Payment Transactions</h3>
