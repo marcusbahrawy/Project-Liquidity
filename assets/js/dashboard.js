@@ -295,10 +295,41 @@ function fetchTimelineData(days) {
 function updateChartData(data) {
     if (!liquidityChart) return;
     
-    liquidityChart.data.labels = data.labels;
-    liquidityChart.data.datasets[0].data = data.balanceData;
-    liquidityChart.data.datasets[1].data = data.incomeData;
-    liquidityChart.data.datasets[2].data = data.expenseData;
+    // Ensure we have valid arrays
+    if (!Array.isArray(data.labels) || !Array.isArray(data.balanceData) || 
+        !Array.isArray(data.incomeData) || !Array.isArray(data.expenseData)) {
+        console.error("Invalid data format received:", data);
+        showChartError('Invalid data format received');
+        return;
+    }
+    
+    // Check if we have empty data
+    if (data.labels.length === 0) {
+        console.log("Empty data set received");
+        // Create some default empty data
+        const daysCount = 30;
+        const emptyLabels = [];
+        const emptyData = [];
+        
+        for (let i = 0; i < daysCount; i++) {
+            const date = new Date();
+            date.setDate(date.getDate() + i);
+            emptyLabels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            emptyData.push(0);
+        }
+        
+        liquidityChart.data.labels = emptyLabels;
+        liquidityChart.data.datasets[0].data = emptyData;
+        liquidityChart.data.datasets[1].data = emptyData;
+        liquidityChart.data.datasets[2].data = emptyData.map(val => -val); // Make expenses negative
+    } else {
+        // Update with real data
+        liquidityChart.data.labels = data.labels;
+        liquidityChart.data.datasets[0].data = data.balanceData;
+        liquidityChart.data.datasets[1].data = data.incomeData;
+        liquidityChart.data.datasets[2].data = data.expenseData.map(val => -val); // Make expenses negative
+    }
+    
     liquidityChart.update();
 }
 
