@@ -2,7 +2,7 @@
 /**
  * Dashboard API
  * 
- * Provides data for the dashboard charts and widgets with improved recurring transaction handling
+ * Provides data for the dashboard charts and widgets with improved recurring transaction handlingg
  * and proper split transaction support
  */
 
