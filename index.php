@@ -1,6 +1,6 @@
 <?php
 /**
- * Main Indexx File with Future Data and Dynamic Date Rangee
+ * Main Indexx File with Future Data and Dynamic Date Rangeee
  * Updated with better split transaction handling in dashboard
  */
 
