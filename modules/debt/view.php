@@ -68,14 +68,21 @@ if ($paymentCount > 0) {
 
 // Group payments by year and month for chart
 $paymentsByMonth = [];
+$currentDate = new DateTime();
+$startDate = (new DateTime())->modify('-12 months');
+
 foreach ($payments as $payment) {
     $date = new DateTime($payment['date']);
-    $yearMonth = $date->format('Y-m');
     
-    if (!isset($paymentsByMonth[$yearMonth])) {
-        $paymentsByMonth[$yearMonth] = 0;
+    // Only include payments from the last 12 months
+    if ($date >= $startDate && $date <= $currentDate) {
+        $yearMonth = $date->format('Y-m');
+        
+        if (!isset($paymentsByMonth[$yearMonth])) {
+            $paymentsByMonth[$yearMonth] = 0;
+        }
+        $paymentsByMonth[$yearMonth] += $payment['amount'];
     }
-    $paymentsByMonth[$yearMonth] += $payment['amount'];
 }
 
 // Sort by date
