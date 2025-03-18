@@ -1,6 +1,6 @@
 <?php
 /**
- * View Debt Details
+ * View Debt Detailss
  */
 
 // Include database connection
