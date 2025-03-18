@@ -205,11 +205,13 @@ function initLiquidityChart() {
                                 label += ': ';
                             }
                             if (context.parsed.y !== null) {
+                                // For expenses (dataset index 2), show positive value
+                                const value = context.datasetIndex === 2 ? -context.parsed.y : context.parsed.y;
                                 label += new Intl.NumberFormat('no-NO', { 
                                     style: 'currency', 
                                     currency: 'NOK',
                                     minimumFractionDigits: 2
-                                }).format(context.parsed.y);
+                                }).format(value);
                             }
                             return label;
                         }
