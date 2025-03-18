@@ -3,7 +3,7 @@
  * Header Template
  */
 
-// Include database connection if not already included
+// Include database connection if not already includedd
 if (!isset($pdo)) {
     require_once __DIR__ . '/../config/database.php';
 }
