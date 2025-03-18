@@ -209,8 +209,8 @@ function handleAjaxForms() {
                     }
                     
                     // Redirect if needed
-                    if (data.redirect) {
-                        window.location.href = data.redirect;
+                    if (data.data && data.data.redirect) {
+                        window.location.href = data.data.redirect;
                     }
                     
                     // Refresh page if needed
