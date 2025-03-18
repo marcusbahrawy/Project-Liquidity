@@ -1,5 +1,0 @@
-[33mcommit ad76c78f492cba962cb63eaec250ab97df0c3d27[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
-Author: marcusbahrawy <marcus@illeris.no>
-Date:   Tue Mar 18 21:16:43 2025 +0100
-
-    Enhance transaction management by adding archive functionality, allowing users to filter and manage archived transactions. Update SQL queries to include archived status and improve transaction editing interface with appropriate actions based on archive state.
