@@ -1,5 +1,5 @@
 /**
- * Dashboard JavaScript - Updated for real data and future projections
+ * Dashboard JavaScript - Updated for real data and future projectionss
  */
 
 document.addEventListener('DOMContentLoaded', function() {
