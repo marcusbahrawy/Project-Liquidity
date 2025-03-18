@@ -332,7 +332,7 @@ body {
     }
 
     .card-body {
-        padding: 25px;
+        padding: 15px 25px;
     }
 
     .card-footer {

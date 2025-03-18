@@ -207,7 +207,7 @@ require_once '../../includes/header.php';
                         </a>
                     </div>
                 <?php else: ?>
-                    <canvas id="paymentsChart" height="250" style="margin-bottom: 20px;"></canvas>
+                    <canvas id="paymentsChart" height="250"></canvas>
                     
                     <div class="payment-list">
                         <h3>Payment Transactions</h3>
@@ -546,7 +546,6 @@ document.addEventListener('DOMContentLoaded', function() {
     font-weight: 600;
     margin-bottom: 15px;
     color: var(--dark);
-    margin-top: 0;
 }
 
 .stats-grid {
