@@ -917,7 +917,7 @@ function getTimelineData() {
             
             // Store values for the chart
             $incomeValues[] = $incomeForDay;
-            $expenseValues[] = $expenseForDay;
+            $expenseValues[] = -$expenseForDay;  // Make expenses negative here
             $balanceValues[] = $balance;
         }
         
