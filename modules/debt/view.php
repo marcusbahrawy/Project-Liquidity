@@ -209,7 +209,7 @@ require_once '../../includes/header.php';
                 <?php else: ?>
                     <canvas id="paymentsChart" height="250"></canvas>
                     
-                    <div class="payment-list mt-4">
+                    <div class="payment-list">
                         <h3>Payment Transactions</h3>
                         
                         <div class="table-container">
