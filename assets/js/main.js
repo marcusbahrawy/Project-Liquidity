@@ -210,16 +210,12 @@ function handleAjaxForms() {
                     
                     // Redirect if needed
                     if (data.redirect) {
-                        setTimeout(() => {
-                            window.location.href = data.redirect;
-                        }, 1000);
+                        window.location.href = data.redirect;
                     }
                     
                     // Refresh page if needed
                     if (data.refresh) {
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
+                        window.location.reload();
                     }
                 } else {
                     // Show error message
