@@ -175,8 +175,7 @@ function initLiquidityChart() {
                     pointBorderWidth: 2,
                     pointRadius: 4,
                     pointHoverRadius: 6,
-                    tension: 0.2,
-                    yAxisID: 'y1'  // Use a separate y-axis for expenses
+                    tension: 0.2
                 }
             ]
         },
@@ -234,8 +233,7 @@ function initLiquidityChart() {
                     }
                 },
                 y: {
-                    beginAtZero: true,
-                    position: 'left',
+                    beginAtZero: false,  // Allow negative values
                     ticks: {
                         callback: function(value) {
                             return new Intl.NumberFormat('no-NO', { 
@@ -245,21 +243,6 @@ function initLiquidityChart() {
                                 minimumFractionDigits: 0,
                                 maximumFractionDigits: 0
                             }).format(value);
-                        }
-                    }
-                },
-                y1: {
-                    beginAtZero: true,
-                    position: 'right',
-                    ticks: {
-                        callback: function(value) {
-                            return new Intl.NumberFormat('no-NO', { 
-                                style: 'currency', 
-                                currency: 'NOK',
-                                notation: 'compact',
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 0
-                            }).format(-value);  // Show negative values
                         }
                     }
                 }
@@ -340,13 +323,13 @@ function updateChartData(data) {
         liquidityChart.data.labels = emptyLabels;
         liquidityChart.data.datasets[0].data = emptyData;
         liquidityChart.data.datasets[1].data = emptyData;
-        liquidityChart.data.datasets[2].data = emptyData;
+        liquidityChart.data.datasets[2].data = emptyData.map(val => -val); // Make expenses negative
     } else {
         // Update with real data
         liquidityChart.data.labels = data.labels;
         liquidityChart.data.datasets[0].data = data.balanceData;
         liquidityChart.data.datasets[1].data = data.incomeData;
-        liquidityChart.data.datasets[2].data = data.expenseData;  // Keep expenses as positive values
+        liquidityChart.data.datasets[2].data = data.expenseData.map(val => -val); // Make expenses negative
     }
     
     liquidityChart.update();
