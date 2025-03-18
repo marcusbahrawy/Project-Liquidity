@@ -16,10 +16,8 @@ $id = (int)$_GET['id'];
 
 // Get transaction
 $stmt = $pdo->prepare("
-    SELECT o.*, c.name as category_name, c.color as category_color
-    FROM outgoing o
-    LEFT JOIN categories c ON o.category_id = c.id
-    WHERE o.id = :id
+    SELECT * FROM outgoing
+    WHERE id = :id
 ");
 $stmt->execute(['id' => $id]);
 $transaction = $stmt->fetch();
@@ -318,23 +316,18 @@ require_once '../../includes/header.php';
             </div>
             <?php endif; ?>
             
-            <!-- Transaction Actions -->
-            <div class="transaction-actions">
-                <?php if (!$transaction['is_archived']): ?>
+            <div class="form-actions">
                 <button type="submit" class="btn btn-primary">
                     <i class="fas fa-save"></i> Save Changes
                 </button>
-                <a href="javascript:void(0)" class="btn btn-danger delete-transaction" data-id="<?php echo $transaction['id']; ?>">
-                    <i class="fas fa-trash"></i> Delete Transaction
-                </a>
-                <?php else: ?>
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> This transaction is archived and cannot be modified.
-                </div>
+                
+                <a href="index.php<?php echo $is_debt ? '?is_debt=1' : ''; ?>" class="btn btn-light">Cancel</a>
+                
+                <?php if (!$isSplitItem): ?>
+                    <a href="api.php?action=delete&id=<?php echo $transaction['id']; ?>" class="btn btn-danger delete-btn" data-name="<?php echo htmlspecialchars($transaction['description']); ?>">
+                        <i class="fas fa-trash"></i> Delete
+                    </a>
                 <?php endif; ?>
-                <a href="index.php" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Cancel
-                </a>
             </div>
         </form>
     </div>

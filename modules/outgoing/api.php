@@ -288,10 +288,10 @@ function updateTransaction() {
         $isSplitItem = !empty($transaction['parent_id']);
         
         if ($isSplitItem) {
-            // Only update description, category, date and notes for split items
+            // Only update description, category, and notes for split items
             $stmt = $pdo->prepare("
                 UPDATE outgoing
-                SET description = :description, category_id = :category_id, notes = :notes, date = :date
+                SET description = :description, category_id = :category_id, notes = :notes
                 WHERE id = :id
             ");
             
@@ -299,7 +299,6 @@ function updateTransaction() {
                 'description' => $_POST['description'],
                 'category_id' => !empty($_POST['category_id']) ? $_POST['category_id'] : null,
                 'notes' => $_POST['notes'] ?? null,
-                'date' => $_POST['date'],
                 'id' => $_POST['id']
             ]);
             
@@ -312,7 +311,7 @@ function updateTransaction() {
             $stmt->execute(['parent_id' => $transaction['parent_id']]);
             $result = $stmt->fetch();
             
-            if ($result && isset($result['total']) && $result['total'] > 0) {
+            if ($result && $result['total'] > 0) {
                 $stmt = $pdo->prepare("
                     UPDATE outgoing
                     SET amount = :amount
@@ -322,6 +321,64 @@ function updateTransaction() {
                     'amount' => $result['total'],
                     'id' => $transaction['parent_id']
                 ]);
+                
+                // If parent is a debt payment, update debt_payments
+                $stmt = $pdo->prepare("
+                    SELECT * FROM outgoing WHERE id = :id
+                ");
+                $stmt->execute(['id' => $transaction['parent_id']]);
+                $parentTx = $stmt->fetch();
+                
+                if ($parentTx && $parentTx['is_debt']) {
+                    // Update debt payment amount
+                    $stmt = $pdo->prepare("
+                        UPDATE debt_payments
+                        SET amount = :amount
+                        WHERE outgoing_id = :outgoing_id
+                    ");
+                    $stmt->execute([
+                        'amount' => $result['total'],
+                        'outgoing_id' => $transaction['parent_id']
+                    ]);
+                    
+                    // Get debt payment to update debt
+                    $stmt = $pdo->prepare("
+                        SELECT * FROM debt_payments
+                        WHERE outgoing_id = :outgoing_id
+                    ");
+                    $stmt->execute(['outgoing_id' => $transaction['parent_id']]);
+                    $debtPayment = $stmt->fetch();
+                    
+                    if ($debtPayment) {
+                        // Get debt
+                        $stmt = $pdo->prepare("
+                            SELECT * FROM debt
+                            WHERE id = :id
+                        ");
+                        $stmt->execute(['id' => $debtPayment['debt_id']]);
+                        $debt = $stmt->fetch();
+                        
+                        if ($debt) {
+                            // Calculate new remaining amount
+                            $originalAmount = $transaction['amount'];
+                            $newAmount = $result['total'];
+                            $amountDiff = $newAmount - $originalAmount;
+                            
+                            $remaining = max(0, $debt['remaining_amount'] - $amountDiff);
+                            
+                            // Update debt
+                            $stmt = $pdo->prepare("
+                                UPDATE debt
+                                SET remaining_amount = :remaining_amount
+                                WHERE id = :id
+                            ");
+                            $stmt->execute([
+                                'remaining_amount' => $remaining,
+                                'id' => $debt['id']
+                            ]);
+                        }
+                    }
+                }
             }
         } else {
             // Update main transaction

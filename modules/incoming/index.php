@@ -15,8 +15,6 @@ $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
 // Fixed to check if recurring is empty string
 $is_recurring = (isset($_GET['recurring']) && $_GET['recurring'] !== '') ? (int)$_GET['recurring'] : null;
-// Add archive filter
-$is_archived = isset($_GET['archived']) ? (int)$_GET['archived'] : 0;
 
 // Initialize transactions array
 $transactions = [];
@@ -29,12 +27,10 @@ if (!empty($search)) {
         SELECT i.*, c.name as category_name, c.color as category_color
         FROM incoming i
         LEFT JOIN categories c ON i.category_id = c.id
-        WHERE i.parent_id IS NULL 
-        AND i.is_archived = ?
-        AND (i.description LIKE ? OR i.notes LIKE ?)
+        WHERE i.parent_id IS NULL AND (i.description LIKE ? OR i.notes LIKE ?)
     ";
     
-    $params = [$is_archived, "%{$search}%", "%{$search}%"];
+    $params = ["%{$search}%", "%{$search}%"];
     
     // Add recurring filter if set
     if (isset($is_recurring)) {
@@ -56,10 +52,9 @@ if (!empty($search)) {
         FROM incoming i
         LEFT JOIN categories c ON i.category_id = c.id
         WHERE i.parent_id IS NULL
-        AND i.is_archived = ?
     ";
     
-    $params = [$is_archived];
+    $params = [];
     
     // Add recurring filter if set
     if (isset($is_recurring)) {
@@ -98,18 +93,6 @@ require_once '../../includes/header.php';
             <i class="fas fa-plus"></i> Add New Income
         </a>
     </div>
-</div>
-
-<!-- Tabs -->
-<div class="nav-tabs mb-4">
-    <a href="?archived=0<?php echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&recurring=' . $is_recurring : ''; ?>" 
-       class="nav-tab <?php echo !$is_archived ? 'active' : ''; ?>">
-        <i class="fas fa-clock"></i> Active
-    </a>
-    <a href="?archived=1<?php echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&recurring=' . $is_recurring : ''; ?>" 
-       class="nav-tab <?php echo $is_archived ? 'active' : ''; ?>">
-        <i class="fas fa-archive"></i> Archive
-    </a>
 </div>
 
 <!-- Filters -->
@@ -217,9 +200,6 @@ require_once '../../includes/header.php';
                                 <?php if ($transaction['is_split']): ?>
                                     <span class="badge badge-info">Split</span>
                                 <?php endif; ?>
-                                <?php if ($transaction['is_archived']): ?>
-                                    <span class="badge badge-secondary">Archived</span>
-                                <?php endif; ?>
                                 <?php if ($transaction['is_fixed'] && $transaction['repeat_interval'] !== 'none'): ?>
                                     <span class="badge badge-recurring">Recurring</span>
                                 <?php endif; ?>
@@ -286,17 +266,13 @@ require_once '../../includes/header.php';
                                         </a>
                                     <?php endif; ?>
                                     
-                                    <?php if (!$transaction['is_archived']): ?>
-                                        <a href="edit.php?id=<?php echo $transaction['id']; ?>" class="btn btn-sm btn-primary" data-tooltip="Edit">
-                                            <i class="fas fa-edit"></i>
-                                        </a>
-                                    <?php endif; ?>
+                                    <a href="edit.php?id=<?php echo $transaction['id']; ?>" class="btn btn-sm btn-primary" data-tooltip="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
                                     
-                                    <?php if (!$transaction['is_archived']): ?>
-                                        <a href="api.php?action=delete&id=<?php echo $transaction['id']; ?>" class="btn btn-sm btn-danger delete-btn" data-name="<?php echo htmlspecialchars($transaction['description']); ?>" data-tooltip="Delete">
-                                            <i class="fas fa-trash"></i>
-                                        </a>
-                                    <?php endif; ?>
+                                    <a href="api.php?action=delete&id=<?php echo $transaction['id']; ?>" class="btn btn-sm btn-danger delete-btn" data-name="<?php echo htmlspecialchars($transaction['description']); ?>" data-tooltip="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
                                 </div>
                             </td>
                         </tr>
@@ -345,11 +321,9 @@ require_once '../../includes/header.php';
                                     </td>
                                     <td>
                                         <div class="table-actions">
-                                            <?php if (!$split['is_archived']): ?>
-                                                <a href="edit.php?id=<?php echo $split['id']; ?>" class="btn btn-sm btn-primary" data-tooltip="Edit">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                            <?php endif; ?>
+                                            <a href="edit.php?id=<?php echo $split['id']; ?>" class="btn btn-sm btn-primary" data-tooltip="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
                                         </div>
                                     </td>
                                 </tr>

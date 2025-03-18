@@ -221,7 +221,7 @@ function updateTransaction() {
                 'description' => $_POST['description'],
                 'category_id' => !empty($_POST['category_id']) ? $_POST['category_id'] : null,
                 'notes' => $_POST['notes'] ?? null,
-                'date' => $_POST['date'],
+                'date' => $_POST['date'], // Allow updating date for split items
                 'id' => $_POST['id']
             ]);
             

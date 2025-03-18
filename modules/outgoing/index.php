@@ -14,28 +14,26 @@ $search = isset($_GET['search']) ? trim($_GET['search']) : null;
 $is_debt = isset($_GET['is_debt']) ? (int)$_GET['is_debt'] : 0; // Default not showing debt
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
-// Fixed to check if recurring is empty string
+// Add recurring filter parameter - fixed to check if it's empty
 $is_recurring = (isset($_GET['recurring']) && $_GET['recurring'] !== '') ? (int)$_GET['recurring'] : null;
-// Add archive filter
-$is_archived = isset($_GET['archived']) ? (int)$_GET['archived'] : 0;
 
 // Initialize transactions array
 $transactions = [];
 $total_amount = 0;
 
-// Build the query
+// Build the query based on whether we're searching or not
 if (!empty($search)) {
-    // Query with search
+    // Query with search (using positional parameters)
     $query = "
         SELECT o.*, c.name as category_name, c.color as category_color
         FROM outgoing o
         LEFT JOIN categories c ON o.category_id = c.id
         WHERE o.parent_id IS NULL 
-        AND o.is_archived = ?
+        AND o.is_debt = ?
         AND (o.description LIKE ? OR o.notes LIKE ?)
     ";
     
-    $params = [$is_archived, "%{$search}%", "%{$search}%"];
+    $params = [$is_debt, "%{$search}%", "%{$search}%"];
     
     // Add recurring filter if set
     if (isset($is_recurring)) {
@@ -46,7 +44,7 @@ if (!empty($search)) {
     // Add order by clause
     $query .= " ORDER BY o.{$sort} {$order}";
     
-    // Execute with positional parameters (more reliable)
+    // Execute with positional parameters
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);
     $transactions = $stmt->fetchAll();
@@ -57,10 +55,10 @@ if (!empty($search)) {
         FROM outgoing o
         LEFT JOIN categories c ON o.category_id = c.id
         WHERE o.parent_id IS NULL
-        AND o.is_archived = ?
+        AND o.is_debt = ?
     ";
     
-    $params = [$is_archived];
+    $params = [$is_debt];
     
     // Add recurring filter if set
     if (isset($is_recurring)) {
@@ -71,7 +69,7 @@ if (!empty($search)) {
     // Add order by clause
     $query .= " ORDER BY o.{$sort} {$order}";
     
-    // Execute with parameters if needed
+    // Execute with debt parameter only
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);
     $transactions = $stmt->fetchAll();
@@ -113,18 +111,6 @@ require_once '../../includes/header.php';
             </a>
         <?php endif; ?>
     </div>
-</div>
-
-<!-- Tabs -->
-<div class="nav-tabs mb-4">
-    <a href="?archived=0<?php echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&recurring=' . $is_recurring : ''; ?>" 
-       class="nav-tab <?php echo !$is_archived ? 'active' : ''; ?>">
-        <i class="fas fa-clock"></i> Active
-    </a>
-    <a href="?archived=1<?php echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&recurring=' . $is_recurring : ''; ?>" 
-       class="nav-tab <?php echo $is_archived ? 'active' : ''; ?>">
-        <i class="fas fa-archive"></i> Archive
-    </a>
 </div>
 
 <!-- Simplified Filters - Only Search -->
@@ -240,9 +226,6 @@ require_once '../../includes/header.php';
                                 <?php if ($transaction['is_fixed'] && $transaction['repeat_interval'] !== 'none'): ?>
                                     <span class="badge badge-recurring">Recurring</span>
                                 <?php endif; ?>
-                                <?php if ($transaction['is_archived']): ?>
-                                    <span class="badge badge-secondary">Archived</span>
-                                <?php endif; ?>
                             </td>
                             <td>
                                 <?php if ($transaction['category_name']): ?>
@@ -305,13 +288,11 @@ require_once '../../includes/header.php';
                                         </a>
                                     <?php endif; ?>
                                     
-                                    <?php if (!$transaction['is_archived']): ?>
-                                        <a href="edit.php?id=<?php echo $transaction['id']; ?>" class="btn btn-sm btn-primary" data-tooltip="Edit">
-                                            <i class="fas fa-edit"></i>
-                                        </a>
-                                    <?php endif; ?>
+                                    <a href="edit.php?id=<?php echo $transaction['id']; ?>" class="btn btn-sm btn-primary" data-tooltip="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
                                     
-                                    <a href="javascript:void(0)" class="btn btn-sm btn-danger delete-transaction" data-id="<?php echo $transaction['id']; ?>" data-tooltip="Delete">
+                                    <a href="api.php?action=delete&id=<?php echo $transaction['id']; ?>" class="btn btn-sm btn-danger delete-btn" data-name="<?php echo htmlspecialchars($transaction['description']); ?>" data-tooltip="Delete">
                                         <i class="fas fa-trash"></i>
                                     </a>
                                 </div>
