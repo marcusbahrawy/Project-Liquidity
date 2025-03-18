@@ -233,7 +233,7 @@ function initLiquidityChart() {
                     }
                 },
                 y: {
-                    beginAtZero: true,
+                    beginAtZero: false,  // Allow negative values
                     ticks: {
                         callback: function(value) {
                             return new Intl.NumberFormat('no-NO', { 
@@ -323,7 +323,7 @@ function updateChartData(data) {
         liquidityChart.data.labels = emptyLabels;
         liquidityChart.data.datasets[0].data = emptyData;
         liquidityChart.data.datasets[1].data = emptyData;
-        liquidityChart.data.datasets[2].data = emptyData.map(val => -val); // Make expenses negative
+        liquidityChart.data.datasets[2].data = emptyData;
     } else {
         // Update with real data
         liquidityChart.data.labels = data.labels;
