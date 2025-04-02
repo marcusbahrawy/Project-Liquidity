@@ -129,7 +129,18 @@ function getTransactionsData() {
                 i.category_id,
                 i.repeat_interval,
                 i.repeat_until,
-                i.date as effective_date,
+                CASE 
+                    WHEN i.is_fixed = 1 AND i.repeat_interval != 'none' THEN
+                        CASE 
+                            WHEN i.repeat_interval = 'daily' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 1) + 1 DAY)
+                            WHEN i.repeat_interval = 'weekly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 7) + 1 WEEK)
+                            WHEN i.repeat_interval = 'monthly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 30) + 1 MONTH)
+                            WHEN i.repeat_interval = 'quarterly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 90) + 3 MONTH)
+                            WHEN i.repeat_interval = 'yearly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 365) + 1 YEAR)
+                            ELSE i.date
+                        END
+                    ELSE i.date
+                END as effective_date,
                 c.name as category_name,
                 c.color as category_color,
                 0 as occurrence
@@ -151,7 +162,18 @@ function getTransactionsData() {
                 o.category_id,
                 o.repeat_interval,
                 o.repeat_until,
-                o.date as effective_date,
+                CASE 
+                    WHEN o.is_fixed = 1 AND o.repeat_interval != 'none' THEN
+                        CASE 
+                            WHEN o.repeat_interval = 'daily' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 1) + 1 DAY)
+                            WHEN o.repeat_interval = 'weekly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 7) + 1 WEEK)
+                            WHEN o.repeat_interval = 'monthly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 30) + 1 MONTH)
+                            WHEN o.repeat_interval = 'quarterly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 90) + 3 MONTH)
+                            WHEN o.repeat_interval = 'yearly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 365) + 1 YEAR)
+                            ELSE o.date
+                        END
+                    ELSE o.date
+                END as effective_date,
                 c.name as category_name,
                 c.color as category_color,
                 0 as occurrence
@@ -173,7 +195,18 @@ function getTransactionsData() {
                 i.category_id,
                 i.repeat_interval,
                 i.repeat_until,
-                i.date as effective_date,
+                CASE 
+                    WHEN i.is_fixed = 1 AND i.repeat_interval != 'none' THEN
+                        CASE 
+                            WHEN i.repeat_interval = 'daily' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 1) + 1 DAY)
+                            WHEN i.repeat_interval = 'weekly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 7) + 1 WEEK)
+                            WHEN i.repeat_interval = 'monthly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 30) + 1 MONTH)
+                            WHEN i.repeat_interval = 'quarterly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 90) + 3 MONTH)
+                            WHEN i.repeat_interval = 'yearly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 365) + 1 YEAR)
+                            ELSE i.date
+                        END
+                    ELSE i.date
+                END as effective_date,
                 c.name as category_name,
                 c.color as category_color,
                 0 as occurrence
@@ -196,7 +229,18 @@ function getTransactionsData() {
                 o.category_id,
                 o.repeat_interval,
                 o.repeat_until,
-                o.date as effective_date,
+                CASE 
+                    WHEN o.is_fixed = 1 AND o.repeat_interval != 'none' THEN
+                        CASE 
+                            WHEN o.repeat_interval = 'daily' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 1) + 1 DAY)
+                            WHEN o.repeat_interval = 'weekly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 7) + 1 WEEK)
+                            WHEN o.repeat_interval = 'monthly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 30) + 1 MONTH)
+                            WHEN o.repeat_interval = 'quarterly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 90) + 3 MONTH)
+                            WHEN o.repeat_interval = 'yearly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 365) + 1 YEAR)
+                            ELSE o.date
+                        END
+                    ELSE o.date
+                END as effective_date,
                 c.name as category_name,
                 c.color as category_color,
                 0 as occurrence
