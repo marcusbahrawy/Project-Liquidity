@@ -31,10 +31,9 @@ $showArchive = isset($_GET['archive']) && $_GET['archive'] == 1;
 $sql = "
     SELECT o.*, c.name as category_name, c.color as category_color,
            COALESCE(
-               (SELECT MAX(split_date) 
+               (SELECT MAX(date) 
                 FROM outgoing 
-                WHERE parent_id = o.id 
-                AND split_date IS NOT NULL),
+                WHERE parent_id = o.id),
                o.date
            ) as effective_date
     FROM outgoing o
@@ -57,10 +56,9 @@ if ($showArchive) {
         CASE 
             WHEN o.is_split = 1 THEN
                 COALESCE(
-                    (SELECT MAX(split_date) 
+                    (SELECT MAX(date) 
                      FROM outgoing 
-                     WHERE parent_id = o.id 
-                     AND split_date IS NOT NULL),
+                     WHERE parent_id = o.id),
                     o.date
                 ) < :current_date
             ELSE o.date < :current_date
@@ -71,10 +69,9 @@ if ($showArchive) {
         CASE 
             WHEN o.is_split = 1 THEN
                 COALESCE(
-                    (SELECT MAX(split_date) 
+                    (SELECT MAX(date) 
                      FROM outgoing 
-                     WHERE parent_id = o.id 
-                     AND split_date IS NOT NULL),
+                     WHERE parent_id = o.id),
                     o.date
                 ) >= :current_date
             ELSE o.date >= :current_date
