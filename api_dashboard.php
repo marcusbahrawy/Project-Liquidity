@@ -122,11 +122,13 @@ function getTransactionsData() {
                     0 as occurrence
                 FROM incoming i
                 LEFT JOIN categories c ON i.category_id = c.id
-                WHERE i.parent_id IS NULL
-                AND i.is_fixed = 0
-                AND i.date >= CURRENT_DATE
+                WHERE i.date >= CURRENT_DATE
                 AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
-                AND (i.parent_id IS NOT NULL OR (i.parent_id IS NULL AND i.is_split = 0))
+                AND (
+                    (i.parent_id IS NULL AND i.is_split = 0) OR
+                    (i.parent_id IS NOT NULL)
+                )
+                AND i.is_fixed = 0
                 UNION ALL
                 SELECT 
                     'outgoing' as type,
@@ -145,11 +147,13 @@ function getTransactionsData() {
                     0 as occurrence
                 FROM outgoing o
                 LEFT JOIN categories c ON o.category_id = c.id
-                WHERE o.parent_id IS NULL
-                AND o.is_fixed = 0
-                AND o.date >= CURRENT_DATE
+                WHERE o.date >= CURRENT_DATE
                 AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
-                AND (o.parent_id IS NOT NULL OR (o.parent_id IS NULL AND o.is_split = 0))
+                AND (
+                    (o.parent_id IS NULL AND o.is_split = 0) OR
+                    (o.parent_id IS NOT NULL)
+                )
+                AND o.is_fixed = 0
             ),
             -- Base query for recurring transactions
             recurring_base AS (
@@ -302,9 +306,15 @@ function getTransactionsData() {
                         FROM incoming i
                         LEFT JOIN categories c ON i.category_id = c.id
                         WHERE i.parent_id = :parent_id
+                        AND i.date >= :current_date
+                        AND i.date <= DATE_ADD(:current_date, INTERVAL :days DAY)
                         ORDER BY i.amount DESC
                     ");
-                    $splitStmt->execute(['parent_id' => $transaction['id']]);
+                    $splitStmt->execute([
+                        'parent_id' => $transaction['id'],
+                        'current_date' => $currentDate,
+                        'days' => $days
+                    ]);
                     $splits = $splitStmt->fetchAll();
                 } else {
                     // Fetch outgoing split items
@@ -313,9 +323,15 @@ function getTransactionsData() {
                         FROM outgoing o
                         LEFT JOIN categories c ON o.category_id = c.id
                         WHERE o.parent_id = :parent_id
+                        AND o.date >= :current_date
+                        AND o.date <= DATE_ADD(:current_date, INTERVAL :days DAY)
                         ORDER BY o.amount DESC
                     ");
-                    $splitStmt->execute(['parent_id' => $transaction['id']]);
+                    $splitStmt->execute([
+                        'parent_id' => $transaction['id'],
+                        'current_date' => $currentDate,
+                        'days' => $days
+                    ]);
                     $splits = $splitStmt->fetchAll();
                 }
                 
