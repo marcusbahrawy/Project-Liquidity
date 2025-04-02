@@ -293,7 +293,9 @@ function getTransactionsData() {
             'days' => $days,
             'current_date' => $currentDate,
             'end_date' => $endDate,
-            'start_date' => $currentDate
+            'start_date' => $currentDate,
+            'current_date_inc' => $currentDate,
+            'current_date_out' => $currentDate
         ]);
         $upcomingTransactions = $stmt->fetchAll();
 
