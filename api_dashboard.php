@@ -237,7 +237,7 @@ function getTransactionsData() {
             SELECT 
                 type, id, description, amount, date, is_split, is_fixed,
                 category_id, repeat_interval, repeat_until, effective_date,
-                category_name, category_color
+                category_name, category_color, occurrence
             FROM recurring_transactions
             WHERE effective_date >= CURRENT_DATE
             ORDER BY effective_date ASC
