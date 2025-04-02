@@ -125,7 +125,7 @@ function getTransactionsData() {
                 WHERE i.parent_id IS NULL
                 AND i.is_fixed = 0
                 AND i.date >= CURRENT_DATE
-                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
+                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days1 DAY)
                 UNION ALL
                 SELECT 
                     'outgoing' as type,
@@ -147,7 +147,7 @@ function getTransactionsData() {
                 WHERE o.parent_id IS NULL
                 AND o.is_fixed = 0
                 AND o.date >= CURRENT_DATE
-                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
+                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days2 DAY)
             ),
             -- Base query for recurring transactions
             recurring_base AS (
@@ -227,7 +227,7 @@ function getTransactionsData() {
                     category_color,
                     occurrence + 1
                 FROM recurring_transactions
-                WHERE effective_date < DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
+                WHERE effective_date < DATE_ADD(CURRENT_DATE, INTERVAL :days3 DAY)
                 AND (repeat_until IS NULL OR effective_date <= repeat_until)
                 AND occurrence < 100  -- Prevent infinite recursion
             )
@@ -245,7 +245,9 @@ function getTransactionsData() {
 
         $stmt = $pdo->prepare($upcoming_transactions_sql);
         $stmt->execute([
-            'days' => $days
+            'days1' => $days,
+            'days2' => $days,
+            'days3' => $days
         ]);
         $upcomingTransactions = $stmt->fetchAll();
 
