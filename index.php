@@ -266,27 +266,31 @@ require_once 'includes/header.php';
 </div>
 
 <div class="row">
-    <div class="col-lg-12">
-        <!-- Upcoming Transactions (Combined) -->
+    <div class="col-lg-6">
+        <!-- Upcoming Income -->
         <div class="upcoming-expenses">
             <div class="upcoming-header">
-                <div class="upcoming-title">Upcoming Transactions <span class="small">(Next <span id="transaction-days"><?php echo $timeRange; ?></span> days)</span></div>
-                <div id="transactions-loading" class="loading-indicator" style="display: none;">
+                <div class="upcoming-title">Upcoming Income <span class="small">(Next <span id="transaction-days"><?php echo $timeRange; ?></span> days)</span></div>
+                <div id="income-loading" class="loading-indicator" style="display: none;">
                     <i class="fas fa-spinner fa-spin"></i> Loading...
                 </div>
             </div>
             
-            <div id="transactions-container" class="expense-list">
-                <?php if (empty($organizedTransactions)): ?>
+            <div id="income-container" class="expense-list">
+                <?php 
+                $incomingTransactions = array_filter($organizedTransactions, function($t) {
+                    return $t['type'] === 'incoming';
+                });
+                
+                if (empty($incomingTransactions)): ?>
                     <div class="expense-item">
                         <div class="expense-details">
-                            <div class="expense-title">No upcoming transactions</div>
+                            <div class="expense-title">No upcoming income</div>
                         </div>
                     </div>
                 <?php else: ?>
-                    <?php foreach ($organizedTransactions as $transaction): ?>
+                    <?php foreach ($incomingTransactions as $transaction): ?>
                         <?php 
-                        // Determine if we should hide the date (if it has splits)
                         $hasChildSplits = isset($transaction['splits']) && !empty($transaction['splits']);
                         ?>
                         <div class="expense-item">
@@ -300,21 +304,18 @@ require_once 'includes/header.php';
                                     <?php if ($transaction['is_split']): ?>
                                         <span class="badge badge-info">Split</span>
                                     <?php endif; ?>
-                                    <span class="transaction-type-badge type-<?php echo $transaction['type']; ?>">
-                                        <?php echo ($transaction['type'] === 'incoming') ? 'Income' : 'Expense'; ?>
-                                    </span>
+                                    <span class="transaction-type-badge type-incoming">Income</span>
                                 </div>
                                 <div class="expense-category"><?php echo htmlspecialchars($transaction['category'] ?? 'Uncategorized'); ?></div>
                             </div>
-                            <div class="expense-amount <?php echo ($transaction['type'] === 'incoming') ? 'amount-income' : 'amount-expense'; ?>">
-                                <?php echo ($transaction['type'] === 'incoming' ? '+' : '-'); ?><?php echo number_format($transaction['amount'], 2); ?> kr
+                            <div class="expense-amount amount-income">
+                                +<?php echo number_format($transaction['amount'], 2); ?> kr
                             </div>
                         </div>
                         
                         <?php if (isset($transaction['splits']) && !empty($transaction['splits'])): ?>
                             <?php foreach ($transaction['splits'] as $split): ?>
                                 <div class="expense-item split-item">
-                                    <!-- Show date only for split items -->
                                     <div class="expense-date">
                                         <div class="expense-day"><?php echo date('d', strtotime($split['date'])); ?></div>
                                         <div class="expense-month"><?php echo date('M', strtotime($split['date'])); ?></div>
@@ -324,10 +325,81 @@ require_once 'includes/header.php';
                                             <i class="fas fa-level-down-alt"></i>
                                             <?php echo htmlspecialchars($split['description']); ?>
                                         </div>
-                                        <!-- Category hidden for splits -->
                                     </div>
-                                    <div class="expense-amount <?php echo ($transaction['type'] === 'incoming') ? 'amount-income' : 'amount-expense'; ?>">
-                                        <?php echo ($transaction['type'] === 'incoming' ? '+' : '-'); ?><?php echo number_format($split['amount'], 2); ?> kr
+                                    <div class="expense-amount amount-income">
+                                        +<?php echo number_format($split['amount'], 2); ?> kr
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <!-- Upcoming Expenses -->
+        <div class="upcoming-expenses">
+            <div class="upcoming-header">
+                <div class="upcoming-title">Upcoming Expenses <span class="small">(Next <span id="transaction-days"><?php echo $timeRange; ?></span> days)</span></div>
+                <div id="expense-loading" class="loading-indicator" style="display: none;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading...
+                </div>
+            </div>
+            
+            <div id="expense-container" class="expense-list">
+                <?php 
+                $outgoingTransactions = array_filter($organizedTransactions, function($t) {
+                    return $t['type'] === 'outgoing';
+                });
+                
+                if (empty($outgoingTransactions)): ?>
+                    <div class="expense-item">
+                        <div class="expense-details">
+                            <div class="expense-title">No upcoming expenses</div>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($outgoingTransactions as $transaction): ?>
+                        <?php 
+                        $hasChildSplits = isset($transaction['splits']) && !empty($transaction['splits']);
+                        ?>
+                        <div class="expense-item">
+                            <div class="expense-date" <?php echo $hasChildSplits ? 'style="display: none;"' : ''; ?>>
+                                <div class="expense-day"><?php echo date('d', strtotime($transaction['date'])); ?></div>
+                                <div class="expense-month"><?php echo date('M', strtotime($transaction['date'])); ?></div>
+                            </div>
+                            <div class="expense-details">
+                                <div class="expense-title">
+                                    <?php echo htmlspecialchars($transaction['description']); ?>
+                                    <?php if ($transaction['is_split']): ?>
+                                        <span class="badge badge-info">Split</span>
+                                    <?php endif; ?>
+                                    <span class="transaction-type-badge type-outgoing">Expense</span>
+                                </div>
+                                <div class="expense-category"><?php echo htmlspecialchars($transaction['category'] ?? 'Uncategorized'); ?></div>
+                            </div>
+                            <div class="expense-amount amount-expense">
+                                -<?php echo number_format($transaction['amount'], 2); ?> kr
+                            </div>
+                        </div>
+                        
+                        <?php if (isset($transaction['splits']) && !empty($transaction['splits'])): ?>
+                            <?php foreach ($transaction['splits'] as $split): ?>
+                                <div class="expense-item split-item">
+                                    <div class="expense-date">
+                                        <div class="expense-day"><?php echo date('d', strtotime($split['date'])); ?></div>
+                                        <div class="expense-month"><?php echo date('M', strtotime($split['date'])); ?></div>
+                                    </div>
+                                    <div class="expense-details split-details">
+                                        <div class="expense-title">
+                                            <i class="fas fa-level-down-alt"></i>
+                                            <?php echo htmlspecialchars($split['description']); ?>
+                                        </div>
+                                    </div>
+                                    <div class="expense-amount amount-expense">
+                                        -<?php echo number_format($split['amount'], 2); ?> kr
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -539,7 +611,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update transactions list in UI with split support
     function updateTransactionsList(transactions) {
-        const container = document.getElementById('transactions-container');
+        // Split transactions into income and expenses
+        const incomeTransactions = transactions.filter(t => t.type === 'incoming');
+        const expenseTransactions = transactions.filter(t => t.type === 'outgoing');
+        
+        // Update income container
+        updateTransactionContainer('income-container', incomeTransactions, 'income');
+        
+        // Update expense container
+        updateTransactionContainer('expense-container', expenseTransactions, 'expense');
+    }
+    
+    // Helper function to update a specific transaction container
+    function updateTransactionContainer(containerId, transactions, type) {
+        const container = document.getElementById(containerId);
         
         // Clear current content
         container.innerHTML = '';
@@ -548,7 +633,7 @@ document.addEventListener('DOMContentLoaded', function() {
             container.innerHTML = `
                 <div class="expense-item">
                     <div class="expense-details">
-                        <div class="expense-title">No upcoming transactions</div>
+                        <div class="expense-title">No upcoming ${type === 'income' ? 'income' : 'expenses'}</div>
                     </div>
                 </div>
             `;
@@ -572,14 +657,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="expense-title">
                             ${escapeHtml(transaction.description)}
                             ${transaction.is_split ? '<span class="badge badge-info">Split</span>' : ''}
-                            <span class="transaction-type-badge type-${transaction.type}">
-                                ${transaction.type === 'incoming' ? 'Income' : 'Expense'}
+                            <span class="transaction-type-badge type-${type}">
+                                ${type === 'income' ? 'Income' : 'Expense'}
                             </span>
                         </div>
                         <div class="expense-category">${escapeHtml(transaction.category || 'Uncategorized')}</div>
                     </div>
-                    <div class="expense-amount ${transaction.type === 'incoming' ? 'amount-income' : 'amount-expense'}">
-                        ${transaction.type === 'incoming' ? '+' : '-'}${formatNumber(transaction.amount)} kr
+                    <div class="expense-amount amount-${type}">
+                        ${type === 'income' ? '+' : '-'}${formatNumber(transaction.amount)} kr
                     </div>
                 </div>
             `;
@@ -604,7 +689,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     container.innerHTML += `
                         <div class="expense-item split-item">
-                            <!-- Show date for split items -->
                             <div class="expense-date">
                                 <div class="expense-day">${splitDay}</div>
                                 <div class="expense-month">${splitMonth}</div>
@@ -614,10 +698,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <i class="fas fa-level-down-alt"></i>
                                     ${escapeHtml(split.description)}
                                 </div>
-                                <!-- Category hidden for splits -->
                             </div>
-                            <div class="expense-amount ${transaction.type === 'incoming' ? 'amount-income' : 'amount-expense'}">
-                                ${transaction.type === 'incoming' ? '+' : '-'}${formatNumber(split.amount)} kr
+                            <div class="expense-amount amount-${type}">
+                                ${type === 'income' ? '+' : '-'}${formatNumber(split.amount)} kr
                             </div>
                         </div>
                     `;
