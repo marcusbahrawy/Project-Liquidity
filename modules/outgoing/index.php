@@ -23,69 +23,46 @@ $show_archive = isset($_GET['archive']) && $_GET['archive'] === '1';
 $transactions = [];
 $total_amount = 0;
 
-// Build the query based on whether we're searching or not
-if (!empty($search)) {
-    // Query with search (using positional parameters)
-    $query = "
-        SELECT o.*, c.name as category_name, c.color as category_color
-        FROM outgoing o
-        LEFT JOIN categories c ON o.category_id = c.id
-        WHERE o.parent_id IS NULL 
-        AND o.is_debt = ?
-        AND (o.description LIKE ? OR o.notes LIKE ?)
-    ";
-    
-    $params = [$is_debt, "%{$search}%", "%{$search}%"];
-    
-    // Add archive and recurring filters
-    if ($show_archive) {
-        $query .= " AND o.date < CURRENT_DATE AND o.is_fixed = 0";
-    } else {
-        $query .= " AND (o.date >= CURRENT_DATE OR o.is_fixed = 1)";
-        if (isset($is_recurring)) {
-            $query .= " AND o.is_fixed = ?";
-            $params[] = $is_recurring;
-        }
-    }
-    
-    // Add order by clause
-    $query .= " ORDER BY o.{$sort} {$order}";
-    
-    // Execute with positional parameters
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $transactions = $stmt->fetchAll();
-} else {
-    // Query without search
-    $query = "
-        SELECT o.*, c.name as category_name, c.color as category_color
-        FROM outgoing o
-        LEFT JOIN categories c ON o.category_id = c.id
-        WHERE o.parent_id IS NULL
-        AND o.is_debt = ?
-    ";
-    
-    $params = [$is_debt];
-    
-    // Add archive and recurring filters
-    if ($show_archive) {
-        $query .= " AND o.date < CURRENT_DATE AND o.is_fixed = 0";
-    } else {
-        $query .= " AND (o.date >= CURRENT_DATE OR o.is_fixed = 1)";
-        if (isset($is_recurring)) {
-            $query .= " AND o.is_fixed = ?";
-            $params[] = $is_recurring;
-        }
-    }
-    
-    // Add order by clause
-    $query .= " ORDER BY o.{$sort} {$order}";
-    
-    // Execute with parameters if needed
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $transactions = $stmt->fetchAll();
-}
+// Get transactions based on archive status
+$currentDate = date('Y-m-d');
+$showArchive = isset($_GET['archive']) && $_GET['archive'] == 1;
+
+// Modified query to handle split transactions correctly
+$sql = "
+    SELECT o.*, c.name as category_name, c.color as category_color,
+           COALESCE(
+               (SELECT MAX(split_date) 
+                FROM outgoing 
+                WHERE parent_id = o.id 
+                AND split_date IS NOT NULL),
+               o.date
+           ) as effective_date
+    FROM outgoing o
+    LEFT JOIN categories c ON o.category_id = c.id
+    WHERE o.parent_id IS NULL
+    AND (
+        CASE 
+            WHEN o.is_split = 1 THEN
+                COALESCE(
+                    (SELECT MAX(split_date) 
+                     FROM outgoing 
+                     WHERE parent_id = o.id 
+                     AND split_date IS NOT NULL),
+                    o.date
+                ) >= :current_date
+            ELSE o.date >= :current_date
+        END
+    ) = :show_upcoming
+    AND o.is_fixed = 0
+    ORDER BY effective_date ASC
+";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute([
+    'current_date' => $currentDate,
+    'show_upcoming' => !$showArchive
+]);
+$transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Calculate total from fetched transactions
 if (!empty($transactions)) {
