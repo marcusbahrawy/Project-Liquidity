@@ -290,7 +290,9 @@ function getTransactionsData() {
 
         $stmt = $pdo->prepare($upcoming_transactions_sql);
         $stmt->execute([
-            'days' => $days
+            'days' => $days,
+            'current_date' => $currentDate,
+            'end_date' => $endDate
         ]);
         $upcomingTransactions = $stmt->fetchAll();
 
