@@ -118,61 +118,155 @@ function getTransactionsData() {
         
         // Get upcoming transactions for the dashboard
         $upcoming_transactions_sql = "
-            SELECT 
-                'incoming' as type,
-                i.id,
-                i.description,
-                i.amount,
-                i.date,
-                i.is_split,
-                i.is_fixed,
-                i.category_id,
-                i.repeat_interval,
-                i.repeat_until,
-                i.date as effective_date,
-                c.name as category_name,
-                c.color as category_color
-            FROM incoming i
-            LEFT JOIN categories c ON i.category_id = c.id
-            WHERE i.date >= :current_date_inc
-            AND i.date <= DATE_ADD(:current_date_inc, INTERVAL :days DAY)
-            AND (
-                (i.parent_id IS NULL AND i.is_split = 0) OR
-                (i.parent_id IS NOT NULL)
+            WITH 
+            -- Base query for non-recurring transactions
+            base_transactions AS (
+                SELECT 
+                    'incoming' as type,
+                    i.id,
+                    i.description,
+                    i.amount,
+                    i.date,
+                    i.is_split,
+                    i.is_fixed,
+                    i.category_id,
+                    i.repeat_interval,
+                    i.repeat_until,
+                    i.date as effective_date,
+                    c.name as category_name,
+                    c.color as category_color,
+                    0 as occurrence
+                FROM incoming i
+                LEFT JOIN categories c ON i.category_id = c.id
+                WHERE i.parent_id IS NULL
+                AND i.is_fixed = 0
+                AND i.date >= CURRENT_DATE
+                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days1 DAY)
+                UNION ALL
+                SELECT 
+                    'outgoing' as type,
+                    o.id,
+                    o.description,
+                    o.amount,
+                    o.date,
+                    o.is_split,
+                    o.is_fixed,
+                    o.category_id,
+                    o.repeat_interval,
+                    o.repeat_until,
+                    o.date as effective_date,
+                    c.name as category_name,
+                    c.color as category_color,
+                    0 as occurrence
+                FROM outgoing o
+                LEFT JOIN categories c ON o.category_id = c.id
+                WHERE o.parent_id IS NULL
+                AND o.is_fixed = 0
+                AND o.date >= CURRENT_DATE
+                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days2 DAY)
+            ),
+            -- Base query for recurring transactions
+            recurring_base AS (
+                SELECT 
+                    'incoming' as type,
+                    i.id,
+                    i.description,
+                    i.amount,
+                    i.date,
+                    i.is_split,
+                    i.is_fixed,
+                    i.category_id,
+                    i.repeat_interval,
+                    i.repeat_until,
+                    i.date as effective_date,
+                    c.name as category_name,
+                    c.color as category_color,
+                    0 as occurrence
+                FROM incoming i
+                LEFT JOIN categories c ON i.category_id = c.id
+                WHERE i.parent_id IS NULL
+                AND i.is_fixed = 1
+                AND i.repeat_interval != 'none'
+                AND (i.repeat_until IS NULL OR i.repeat_until >= CURRENT_DATE)
+                UNION ALL
+                SELECT 
+                    'outgoing' as type,
+                    o.id,
+                    o.description,
+                    o.amount,
+                    o.date,
+                    o.is_split,
+                    o.is_fixed,
+                    o.category_id,
+                    o.repeat_interval,
+                    o.repeat_until,
+                    o.date as effective_date,
+                    c.name as category_name,
+                    c.color as category_color,
+                    0 as occurrence
+                FROM outgoing o
+                LEFT JOIN categories c ON o.category_id = c.id
+                WHERE o.parent_id IS NULL
+                AND o.is_fixed = 1
+                AND o.repeat_interval != 'none'
+                AND (o.repeat_until IS NULL OR o.repeat_until >= CURRENT_DATE)
+            ),
+            -- Generate future occurrences
+            recurring_transactions AS (
+                -- Base case: initial transactions
+                SELECT * FROM recurring_base
+                
+                UNION ALL
+                
+                -- Recursive case: generate next occurrence
+                SELECT 
+                    rt.type,
+                    rt.id,
+                    rt.description,
+                    rt.amount,
+                    rt.date,
+                    rt.is_split,
+                    rt.is_fixed,
+                    rt.category_id,
+                    rt.repeat_interval,
+                    rt.repeat_until,
+                    CASE 
+                        WHEN rt.repeat_interval = 'daily' THEN DATE_ADD(rt.effective_date, INTERVAL 1 DAY)
+                        WHEN rt.repeat_interval = 'weekly' THEN DATE_ADD(rt.effective_date, INTERVAL 1 WEEK)
+                        WHEN rt.repeat_interval = 'monthly' THEN DATE_ADD(rt.effective_date, INTERVAL 1 MONTH)
+                        WHEN rt.repeat_interval = 'quarterly' THEN DATE_ADD(rt.effective_date, INTERVAL 3 MONTH)
+                        WHEN rt.repeat_interval = 'yearly' THEN DATE_ADD(rt.effective_date, INTERVAL 1 YEAR)
+                    END as effective_date,
+                    rt.category_name,
+                    rt.category_color,
+                    rt.occurrence + 1
+                FROM recurring_transactions rt
+                WHERE rt.effective_date < DATE_ADD(CURRENT_DATE, INTERVAL :days3 DAY)
+                AND (rt.repeat_until IS NULL OR rt.effective_date < rt.repeat_until)
             )
-            AND i.is_fixed = 0
+            -- Combine all transactions
+            SELECT 
+                type, id, description, amount, effective_date as date, is_split, is_fixed,
+                category_id, repeat_interval, repeat_until, effective_date,
+                category_name, category_color, occurrence
+            FROM base_transactions
             UNION ALL
             SELECT 
-                'outgoing' as type,
-                o.id,
-                o.description,
-                o.amount,
-                o.date,
-                o.is_split,
-                o.is_fixed,
-                o.category_id,
-                o.repeat_interval,
-                o.repeat_until,
-                o.date as effective_date,
-                c.name as category_name,
-                c.color as category_color
-            FROM outgoing o
-            LEFT JOIN categories c ON o.category_id = c.id
-            WHERE o.date >= :current_date_out
-            AND o.date <= DATE_ADD(:current_date_out, INTERVAL :days DAY)
-            AND (
-                (o.parent_id IS NULL AND o.is_split = 0) OR
-                (o.parent_id IS NOT NULL)
-            )
-            AND o.is_fixed = 0
+                type, id, description, amount, effective_date as date, is_split, is_fixed,
+                category_id, repeat_interval, repeat_until, effective_date,
+                category_name, category_color, occurrence
+            FROM recurring_transactions
+            WHERE effective_date >= CURRENT_DATE
+            AND effective_date <= DATE_ADD(CURRENT_DATE, INTERVAL :days4 DAY)
             ORDER BY effective_date ASC
         ";
 
         $stmt = $pdo->prepare($upcoming_transactions_sql);
         $stmt->execute([
-            'days' => $days,
-            'current_date_inc' => $currentDate,
-            'current_date_out' => $currentDate
+            'days1' => $days,
+            'days2' => $days,
+            'days3' => $days,
+            'days4' => $days
         ]);
         $upcomingTransactions = $stmt->fetchAll();
 
