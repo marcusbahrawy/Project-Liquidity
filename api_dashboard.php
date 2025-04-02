@@ -165,7 +165,7 @@ function getTransactionsData() {
                     i.date as effective_date,
                     c.name as category_name,
                     c.color as category_color,
-                    1 as occurrence
+                    0 as occurrence
                 FROM incoming i
                 LEFT JOIN categories c ON i.category_id = c.id
                 WHERE i.parent_id IS NULL
@@ -187,7 +187,7 @@ function getTransactionsData() {
                     o.date as effective_date,
                     c.name as category_name,
                     c.color as category_color,
-                    1 as occurrence
+                    0 as occurrence
                 FROM outgoing o
                 LEFT JOIN categories c ON o.category_id = c.id
                 WHERE o.parent_id IS NULL
@@ -195,41 +195,38 @@ function getTransactionsData() {
                 AND o.repeat_interval != 'none'
                 AND (o.repeat_until IS NULL OR o.repeat_until >= CURRENT_DATE)
             ),
-            -- Generate future occurrences of recurring transactions
+            -- Generate future occurrences
             recurring_transactions AS (
+                -- Base case: initial transactions
                 SELECT * FROM recurring_base
+                
                 UNION ALL
+                
+                -- Recursive case: generate next occurrence
                 SELECT 
-                    type,
-                    id,
-                    description,
-                    amount,
+                    rt.type,
+                    rt.id,
+                    rt.description,
+                    rt.amount,
+                    rt.date,
+                    rt.is_split,
+                    rt.is_fixed,
+                    rt.category_id,
+                    rt.repeat_interval,
+                    rt.repeat_until,
                     CASE 
-                        WHEN repeat_interval = 'daily' THEN DATE_ADD(effective_date, INTERVAL occurrence DAY)
-                        WHEN repeat_interval = 'weekly' THEN DATE_ADD(effective_date, INTERVAL occurrence WEEK)
-                        WHEN repeat_interval = 'monthly' THEN DATE_ADD(effective_date, INTERVAL occurrence MONTH)
-                        WHEN repeat_interval = 'quarterly' THEN DATE_ADD(effective_date, INTERVAL occurrence * 3 MONTH)
-                        WHEN repeat_interval = 'yearly' THEN DATE_ADD(effective_date, INTERVAL occurrence YEAR)
-                    END as date,
-                    is_split,
-                    is_fixed,
-                    category_id,
-                    repeat_interval,
-                    repeat_until,
-                    CASE 
-                        WHEN repeat_interval = 'daily' THEN DATE_ADD(effective_date, INTERVAL occurrence DAY)
-                        WHEN repeat_interval = 'weekly' THEN DATE_ADD(effective_date, INTERVAL occurrence WEEK)
-                        WHEN repeat_interval = 'monthly' THEN DATE_ADD(effective_date, INTERVAL occurrence MONTH)
-                        WHEN repeat_interval = 'quarterly' THEN DATE_ADD(effective_date, INTERVAL occurrence * 3 MONTH)
-                        WHEN repeat_interval = 'yearly' THEN DATE_ADD(effective_date, INTERVAL occurrence YEAR)
+                        WHEN rt.repeat_interval = 'daily' THEN DATE_ADD(rt.effective_date, INTERVAL 1 DAY)
+                        WHEN rt.repeat_interval = 'weekly' THEN DATE_ADD(rt.effective_date, INTERVAL 1 WEEK)
+                        WHEN rt.repeat_interval = 'monthly' THEN DATE_ADD(rt.effective_date, INTERVAL 1 MONTH)
+                        WHEN rt.repeat_interval = 'quarterly' THEN DATE_ADD(rt.effective_date, INTERVAL 3 MONTH)
+                        WHEN rt.repeat_interval = 'yearly' THEN DATE_ADD(rt.effective_date, INTERVAL 1 YEAR)
                     END as effective_date,
-                    category_name,
-                    category_color,
-                    occurrence + 1
-                FROM recurring_transactions
-                WHERE effective_date < DATE_ADD(CURRENT_DATE, INTERVAL :days3 DAY)
-                AND (repeat_until IS NULL OR effective_date <= repeat_until)
-                AND occurrence < 100  -- Prevent infinite recursion
+                    rt.category_name,
+                    rt.category_color,
+                    rt.occurrence + 1
+                FROM recurring_transactions rt
+                WHERE rt.effective_date < DATE_ADD(CURRENT_DATE, INTERVAL :days3 DAY)
+                AND (rt.repeat_until IS NULL OR rt.effective_date < rt.repeat_until)
             )
             -- Combine all transactions
             SELECT * FROM base_transactions
