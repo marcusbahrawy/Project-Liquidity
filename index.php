@@ -114,23 +114,39 @@ $totalDebt = $debtTotal['total'] ?? 0;
 // Get upcoming transactions for the dashboard
 $upcoming_transactions_sql = "
     WITH effective_dates AS (
-        SELECT 'incoming' as type, i.*,
-               COALESCE(
-                   (SELECT MAX(date) 
-                    FROM incoming 
-                    WHERE parent_id = i.id),
-                   i.date
-               ) as effective_date
+        SELECT 
+            'incoming' as type,
+            i.id,
+            i.description,
+            i.amount,
+            i.date,
+            i.is_split,
+            i.is_fixed,
+            i.category_id,
+            COALESCE(
+                (SELECT MAX(date) 
+                 FROM incoming 
+                 WHERE parent_id = i.id),
+                i.date
+            ) as effective_date
         FROM incoming i
         WHERE i.parent_id IS NULL
         UNION ALL
-        SELECT 'outgoing' as type, o.*,
-               COALESCE(
-                   (SELECT MAX(date) 
-                    FROM outgoing 
-                    WHERE parent_id = o.id),
-                   o.date
-               ) as effective_date
+        SELECT 
+            'outgoing' as type,
+            o.id,
+            o.description,
+            o.amount,
+            o.date,
+            o.is_split,
+            o.is_fixed,
+            o.category_id,
+            COALESCE(
+                (SELECT MAX(date) 
+                 FROM outgoing 
+                 WHERE parent_id = o.id),
+                o.date
+            ) as effective_date
         FROM outgoing o
         WHERE o.parent_id IS NULL
     )
