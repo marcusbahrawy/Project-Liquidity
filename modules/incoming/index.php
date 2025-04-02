@@ -35,11 +35,15 @@ if (!empty($search)) {
     
     $params = ["%{$search}%", "%{$search}%"];
     
-    // Add archive filter
+    // Add archive and recurring filters
     if ($show_archive) {
         $query .= " AND i.date < CURRENT_DATE AND i.is_fixed = 0";
     } else {
         $query .= " AND (i.date >= CURRENT_DATE OR i.is_fixed = 1)";
+        if (isset($is_recurring)) {
+            $query .= " AND i.is_fixed = ?";
+            $params[] = $is_recurring;
+        }
     }
     
     // Add order by clause
@@ -60,11 +64,15 @@ if (!empty($search)) {
     
     $params = [];
     
-    // Add archive filter
+    // Add archive and recurring filters
     if ($show_archive) {
         $query .= " AND i.date < CURRENT_DATE AND i.is_fixed = 0";
     } else {
         $query .= " AND (i.date >= CURRENT_DATE OR i.is_fixed = 1)";
+        if (isset($is_recurring)) {
+            $query .= " AND i.is_fixed = ?";
+            $params[] = $is_recurring;
+        }
     }
     
     // Add order by clause
