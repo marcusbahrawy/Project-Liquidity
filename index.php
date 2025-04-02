@@ -203,7 +203,7 @@ require_once 'includes/header.php';
     <!-- Income Card -->
     <div class="stat-card">
         <div class="stat-icon bg-success text-light">
-            <i class="fas fa-arrow-down"></i>
+            <i class="fas fa-arrow-up"></i>
         </div>
         <div class="stat-value"><?php echo number_format($totalIncome, 2); ?> kr</div>
         <div class="stat-label">Upcoming Income</div>
@@ -216,7 +216,7 @@ require_once 'includes/header.php';
     <!-- Expense Card -->
     <div class="stat-card">
         <div class="stat-icon bg-danger text-light">
-            <i class="fas fa-arrow-up"></i>
+            <i class="fas fa-arrow-down"></i>
         </div>
         <div class="stat-value"><?php echo number_format($totalExpense, 2); ?> kr</div>
         <div class="stat-label">Upcoming Expenses</div>
