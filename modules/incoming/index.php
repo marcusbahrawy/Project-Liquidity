@@ -15,6 +15,8 @@ $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
 // Fixed to check if recurring is empty string
 $is_recurring = (isset($_GET['recurring']) && $_GET['recurring'] !== '') ? (int)$_GET['recurring'] : null;
+// Add archive filter
+$show_archive = isset($_GET['archive']) && $_GET['archive'] === '1';
 
 // Initialize transactions array
 $transactions = [];
@@ -27,15 +29,18 @@ if (!empty($search)) {
         SELECT i.*, c.name as category_name, c.color as category_color
         FROM incoming i
         LEFT JOIN categories c ON i.category_id = c.id
-        WHERE i.parent_id IS NULL AND (i.description LIKE ? OR i.notes LIKE ?)
+        WHERE i.parent_id IS NULL 
+        AND (i.description LIKE ? OR i.notes LIKE ?)
+        AND i.is_fixed = 0
     ";
     
     $params = ["%{$search}%", "%{$search}%"];
     
-    // Add recurring filter if set
-    if (isset($is_recurring)) {
-        $query .= " AND i.is_fixed = ?";
-        $params[] = $is_recurring;
+    // Add archive filter
+    if ($show_archive) {
+        $query .= " AND i.date < CURRENT_DATE";
+    } else {
+        $query .= " AND i.date >= CURRENT_DATE";
     }
     
     // Add order by clause
@@ -52,14 +57,16 @@ if (!empty($search)) {
         FROM incoming i
         LEFT JOIN categories c ON i.category_id = c.id
         WHERE i.parent_id IS NULL
+        AND i.is_fixed = 0
     ";
     
     $params = [];
     
-    // Add recurring filter if set
-    if (isset($is_recurring)) {
-        $query .= " AND i.is_fixed = ?";
-        $params[] = $is_recurring;
+    // Add archive filter
+    if ($show_archive) {
+        $query .= " AND i.date < CURRENT_DATE";
+    } else {
+        $query .= " AND i.date >= CURRENT_DATE";
     }
     
     // Add order by clause
@@ -94,6 +101,20 @@ require_once '../../includes/header.php';
         </a>
     </div>
 </div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link <?php echo !$show_archive ? 'active' : ''; ?>" href="?<?php echo http_build_query(array_merge($_GET, ['archive' => '0'])); ?>">
+            <i class="fas fa-clock"></i> Upcoming
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?php echo $show_archive ? 'active' : ''; ?>" href="?<?php echo http_build_query(array_merge($_GET, ['archive' => '1'])); ?>">
+            <i class="fas fa-archive"></i> Archive
+        </a>
+    </li>
+</ul>
 
 <!-- Filters -->
 <div class="card mb-4">
