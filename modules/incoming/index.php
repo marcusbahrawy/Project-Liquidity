@@ -100,20 +100,6 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<!-- Tabs -->
-<ul class="nav nav-tabs mb-4">
-    <li class="nav-item">
-        <a class="nav-link <?php echo !$show_archive ? 'active' : ''; ?>" href="?<?php echo http_build_query(array_merge($_GET, ['archive' => '0'])); ?>">
-            <i class="fas fa-clock"></i> Upcoming
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?php echo $show_archive ? 'active' : ''; ?>" href="?<?php echo http_build_query(array_merge($_GET, ['archive' => '1'])); ?>">
-            <i class="fas fa-archive"></i> Archive
-        </a>
-    </li>
-</ul>
-
 <!-- Filters -->
 <div class="card mb-4">
     <div class="card-body">
