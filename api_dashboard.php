@@ -141,8 +141,6 @@ function getTransactionsData() {
             WHERE o.parent_id IS NULL
             AND o.date >= CURRENT_DATE
             AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days_out DAY)
-            ORDER BY effective_date ASC
-            LIMIT 10
         ";
 
         $stmt = $pdo->prepare($upcoming_transactions_sql);
@@ -154,8 +152,24 @@ function getTransactionsData() {
 
         // Debug log
         error_log("Found " . count($upcomingTransactions) . " transactions");
+        
+        // Count income vs expenses
+        $incomeCount = 0;
+        $expenseCount = 0;
         foreach ($upcomingTransactions as $tx) {
-            error_log("Transaction: " . json_encode($tx));
+            if ($tx['type'] === 'incoming') {
+                $incomeCount++;
+            } else {
+                $expenseCount++;
+            }
+        }
+        error_log("Income transactions: {$incomeCount}, Expense transactions: {$expenseCount}");
+        
+        // Log all income transactions
+        foreach ($upcomingTransactions as $tx) {
+            if ($tx['type'] === 'incoming') {
+                error_log("Income transaction: " . json_encode($tx));
+            }
         }
 
         // Process transactions to include split items
