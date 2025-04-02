@@ -114,18 +114,11 @@ function getTransactionsData() {
                     i.category_id,
                     i.repeat_interval,
                     i.repeat_until,
-                    COALESCE(
-                        (SELECT MAX(date) 
-                         FROM incoming 
-                         WHERE parent_id = i.id),
-                        i.date
-                    ) as effective_date
+                    i.date as effective_date
                 FROM incoming i
                 WHERE i.parent_id IS NULL
-                AND (
-                    i.date >= CURRENT_DATE 
-                    OR (i.is_fixed = 1 AND (i.repeat_until IS NULL OR i.repeat_until >= CURRENT_DATE))
-                )
+                AND i.date >= CURRENT_DATE
+                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
                 UNION ALL
                 SELECT 
                     'outgoing' as type,
@@ -138,18 +131,11 @@ function getTransactionsData() {
                     o.category_id,
                     o.repeat_interval,
                     o.repeat_until,
-                    COALESCE(
-                        (SELECT MAX(date) 
-                         FROM outgoing 
-                         WHERE parent_id = o.id),
-                        o.date
-                    ) as effective_date
+                    o.date as effective_date
                 FROM outgoing o
                 WHERE o.parent_id IS NULL
-                AND (
-                    o.date >= CURRENT_DATE 
-                    OR (o.is_fixed = 1 AND (o.repeat_until IS NULL OR o.repeat_until >= CURRENT_DATE))
-                )
+                AND o.date >= CURRENT_DATE
+                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
             )
             SELECT e.*, c.name as category_name, c.color as category_color
             FROM effective_dates e
@@ -159,7 +145,7 @@ function getTransactionsData() {
         ";
 
         $stmt = $pdo->prepare($upcoming_transactions_sql);
-        $stmt->execute();
+        $stmt->execute(['days' => $days]);
         $upcomingTransactions = $stmt->fetchAll();
 
         // Debug log
