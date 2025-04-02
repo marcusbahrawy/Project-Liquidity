@@ -31,16 +31,15 @@ if (!empty($search)) {
         LEFT JOIN categories c ON i.category_id = c.id
         WHERE i.parent_id IS NULL 
         AND (i.description LIKE ? OR i.notes LIKE ?)
-        AND i.is_fixed = 0
     ";
     
     $params = ["%{$search}%", "%{$search}%"];
     
     // Add archive filter
     if ($show_archive) {
-        $query .= " AND i.date < CURRENT_DATE";
+        $query .= " AND i.date < CURRENT_DATE AND i.is_fixed = 0";
     } else {
-        $query .= " AND i.date >= CURRENT_DATE";
+        $query .= " AND (i.date >= CURRENT_DATE OR i.is_fixed = 1)";
     }
     
     // Add order by clause
@@ -57,16 +56,15 @@ if (!empty($search)) {
         FROM incoming i
         LEFT JOIN categories c ON i.category_id = c.id
         WHERE i.parent_id IS NULL
-        AND i.is_fixed = 0
     ";
     
     $params = [];
     
     // Add archive filter
     if ($show_archive) {
-        $query .= " AND i.date < CURRENT_DATE";
+        $query .= " AND i.date < CURRENT_DATE AND i.is_fixed = 0";
     } else {
-        $query .= " AND i.date >= CURRENT_DATE";
+        $query .= " AND (i.date >= CURRENT_DATE OR i.is_fixed = 1)";
     }
     
     // Add order by clause
