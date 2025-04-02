@@ -155,6 +155,14 @@ require_once '../../includes/header.php';
     <div class="card-header">
         <div class="card-title">Incoming Transactions</div>
         <div class="card-actions">
+            <div class="btn-group mr-2">
+                <a href="?<?php echo http_build_query(array_merge($_GET, ['archive' => '0'])); ?>" class="btn btn-light btn-sm <?php echo !$show_archive ? 'active' : ''; ?>">
+                    <i class="fas fa-clock"></i> Upcoming
+                </a>
+                <a href="?<?php echo http_build_query(array_merge($_GET, ['archive' => '1'])); ?>" class="btn btn-light btn-sm <?php echo $show_archive ? 'active' : ''; ?>">
+                    <i class="fas fa-archive"></i> Archive
+                </a>
+            </div>
             <div class="dropdown">
                 <button class="btn btn-light btn-sm dropdown-toggle" type="button" id="exportDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <i class="fas fa-download"></i> Export
@@ -549,6 +557,41 @@ require_once '../../includes/header.php';
         flex: 0 0 100%;
         max-width: 100%;
     }
+}
+
+/* Button group styles */
+.btn-group {
+    display: inline-flex;
+    vertical-align: middle;
+}
+
+.btn-group .btn {
+    position: relative;
+    flex: 1 1 auto;
+    border-radius: 0;
+}
+
+.btn-group .btn:first-child {
+    border-top-left-radius: 0.25rem;
+    border-bottom-left-radius: 0.25rem;
+}
+
+.btn-group .btn:last-child {
+    border-top-right-radius: 0.25rem;
+    border-bottom-right-radius: 0.25rem;
+}
+
+.btn-group .btn:not(:first-child) {
+    margin-left: -1px;
+}
+
+.btn-group .btn.active {
+    background-color: var(--gray-light);
+    color: var(--dark);
+}
+
+.mr-2 {
+    margin-right: 0.5rem;
 }
 </style>
 
