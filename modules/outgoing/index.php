@@ -87,7 +87,12 @@ if ($showArchive) {
 // Add order by clause
 $sql .= " ORDER BY effective_date {$order}";
 
+// Add current_date parameter
 $params['current_date'] = $currentDate;
+
+// Debug output
+error_log("SQL Query: " . $sql);
+error_log("Parameters: " . print_r($params, true));
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
