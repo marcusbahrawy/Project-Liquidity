@@ -125,7 +125,7 @@ function getTransactionsData() {
                 WHERE i.parent_id IS NULL
                 AND i.is_fixed = 0
                 AND i.date >= CURRENT_DATE
-                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days1 DAY)
+                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
                 UNION ALL
                 SELECT 
                     'outgoing' as type,
@@ -147,7 +147,7 @@ function getTransactionsData() {
                 WHERE o.parent_id IS NULL
                 AND o.is_fixed = 0
                 AND o.date >= CURRENT_DATE
-                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days2 DAY)
+                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
                 UNION ALL
                 -- Add split transactions
                 SELECT 
@@ -169,7 +169,7 @@ function getTransactionsData() {
                 LEFT JOIN categories c ON i.category_id = c.id
                 WHERE i.parent_id IS NOT NULL
                 AND i.date >= CURRENT_DATE
-                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days1 DAY)
+                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
                 UNION ALL
                 SELECT 
                     'outgoing' as type,
@@ -190,7 +190,7 @@ function getTransactionsData() {
                 LEFT JOIN categories c ON o.category_id = c.id
                 WHERE o.parent_id IS NOT NULL
                 AND o.date >= CURRENT_DATE
-                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days2 DAY)
+                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
             ),
             -- Base query for recurring transactions
             recurring_base AS (
@@ -268,7 +268,7 @@ function getTransactionsData() {
                     rt.category_color,
                     rt.occurrence + 1
                 FROM recurring_transactions rt
-                WHERE rt.effective_date < DATE_ADD(CURRENT_DATE, INTERVAL :days3 DAY)
+                WHERE rt.effective_date < DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
                 AND (rt.repeat_until IS NULL OR rt.effective_date < rt.repeat_until)
             )
             -- Combine all transactions
@@ -284,16 +284,13 @@ function getTransactionsData() {
                 category_name, category_color, occurrence
             FROM recurring_transactions
             WHERE effective_date >= CURRENT_DATE
-            AND effective_date <= DATE_ADD(CURRENT_DATE, INTERVAL :days4 DAY)
+            AND effective_date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
             ORDER BY effective_date ASC
         ";
 
         $stmt = $pdo->prepare($upcoming_transactions_sql);
         $stmt->execute([
-            'days1' => $days,
-            'days2' => $days,
-            'days3' => $days,
-            'days4' => $days
+            'days' => $days
         ]);
         $upcomingTransactions = $stmt->fetchAll();
 
