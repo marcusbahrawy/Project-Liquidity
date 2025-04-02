@@ -139,8 +139,11 @@ function getTransactionsData() {
             FROM outgoing o
             LEFT JOIN categories c ON o.category_id = c.id
             WHERE o.parent_id IS NULL
-            AND o.date >= CURRENT_DATE
-            AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days_out DAY)
+            AND (
+                (o.is_fixed = 0 AND o.date >= CURRENT_DATE AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days_out DAY))
+                OR 
+                (o.is_fixed = 1 AND o.repeat_interval != 'none' AND (o.repeat_until IS NULL OR o.repeat_until >= CURRENT_DATE))
+            )
             ORDER BY effective_date ASC
         ";
 
