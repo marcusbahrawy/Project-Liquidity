@@ -168,11 +168,11 @@ function addTransaction() {
                 $stmt = $pdo->prepare("
                     INSERT INTO outgoing (
                         description, amount, date, category_id, notes, 
-                        parent_id, is_debt, created_at
+                        parent_id, is_debt, is_split, created_at
                     )
                     VALUES (
                         :description, :amount, :date, :category_id, :notes, 
-                        :parent_id, :is_debt, NOW()
+                        :parent_id, :is_debt, 1, NOW()
                     )
                 ");
                 
@@ -597,11 +597,11 @@ function updateTransaction() {
                     $stmt = $pdo->prepare("
                         INSERT INTO outgoing (
                             description, amount, date, category_id, notes, 
-                            parent_id, is_debt, created_at
+                            parent_id, is_debt, is_split, created_at
                         )
                         VALUES (
                             :description, :amount, :date, :category_id, :notes, 
-                            :parent_id, :is_debt, NOW()
+                            :parent_id, :is_debt, 1, NOW()
                         )
                     ");
                     

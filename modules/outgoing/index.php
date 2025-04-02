@@ -36,14 +36,24 @@ $sql = "
                     FROM outgoing 
                     WHERE parent_id = o.id),
                    o.date
-               ) as effective_date
+               ) as effective_date,
+               (SELECT COUNT(*) FROM outgoing WHERE parent_id = o.id) as split_count
         FROM outgoing o
         WHERE o.parent_id IS NULL
     )
-    SELECT e.*, c.name as category_name, c.color as category_color
+    SELECT e.*, c.name as category_name, c.color as category_color,
+           GROUP_CONCAT(
+               CASE 
+                   WHEN s.id IS NOT NULL 
+                   THEN CONCAT(s.description, '|', s.amount, '|', s.date)
+                   ELSE NULL 
+               END
+           ) as split_items
     FROM effective_dates e
     LEFT JOIN categories c ON e.category_id = c.id
+    LEFT JOIN outgoing s ON s.parent_id = e.id
     WHERE e.is_debt = :is_debt
+    GROUP BY e.id
 ";
 
 $params = ['is_debt' => $is_debt];

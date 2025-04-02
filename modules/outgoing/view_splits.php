@@ -51,7 +51,8 @@ if ($is_debt) {
 
 // Get split items
 $stmt = $pdo->prepare("
-    SELECT o.*, c.name as category_name, c.color as category_color
+    SELECT o.*, c.name as category_name, c.color as category_color,
+           (SELECT COUNT(*) FROM outgoing WHERE parent_id = o.id) as has_children
     FROM outgoing o
     LEFT JOIN categories c ON o.category_id = c.id
     WHERE o.parent_id = :parent_id
@@ -60,11 +61,23 @@ $stmt = $pdo->prepare("
 $stmt->execute(['parent_id' => $id]);
 $splits = $stmt->fetchAll();
 
+// Validate split transactions
+$hasInvalidSplits = false;
+foreach ($splits as $split) {
+    if ($split['has_children'] > 0) {
+        $hasInvalidSplits = true;
+        break;
+    }
+}
+
 // Calculate totals
 $totalAmount = 0;
 foreach ($splits as $split) {
     $totalAmount += $split['amount'];
 }
+
+// Validate total amount matches parent transaction
+$amountMismatch = abs($totalAmount - $transaction['amount']) > 0.01;
 
 // Include header
 require_once '../../includes/header.php';
@@ -199,7 +212,7 @@ require_once '../../includes/header.php';
         <div class="card-actions">
             <span class="badge badge-primary">
                 Total: <?php echo number_format($totalAmount, 2); ?> kr
-                <?php if ($totalAmount != $transaction['amount']): ?>
+                <?php if ($amountMismatch): ?>
                     <span class="text-warning">(Difference: <?php echo number_format($transaction['amount'] - $totalAmount, 2); ?> kr)</span>
                 <?php endif; ?>
             </span>
@@ -250,7 +263,7 @@ require_once '../../includes/header.php';
                     <th class="text-right amount-negative"><?php echo number_format($totalAmount, 2); ?> kr</th>
                     <th colspan="2"></th>
                 </tr>
-                <?php if ($totalAmount != $transaction['amount']): ?>
+                <?php if ($amountMismatch): ?>
                     <tr class="difference-row">
                         <th colspan="3">Difference</th>
                         <th class="text-right <?php echo ($transaction['amount'] > $totalAmount) ? 'amount-negative' : 'amount-positive'; ?>">
