@@ -58,7 +58,7 @@ if (!empty($search)) {
 if ($showArchive) {
     $sql .= " AND e.effective_date < :current_date AND e.is_fixed = 0";
 } else {
-    $sql .= " AND e.effective_date >= :current_date";
+    $sql .= " AND (e.effective_date >= :current_date OR e.is_fixed = 1)";
     if (isset($is_recurring)) {
         $sql .= " AND e.is_fixed = :is_recurring";
         $params['is_recurring'] = $is_recurring;
