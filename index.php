@@ -480,7 +480,7 @@ require_once 'includes/header.php';
 
 .upcoming-expenses {
     height: 100%;
-    background: var(--card-bg);
+    background-color: white;
     border-radius: var(--border-radius);
     box-shadow: var(--card-shadow);
     margin-bottom: 20px;
