@@ -227,33 +227,189 @@ function getDashboardStats() {
         $result = $stmt->fetch();
         $currentBalance = $result['balance'] ?? 0;
         
-        // Get upcoming income
+        // Get non-recurring upcoming income
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(amount), 0) as total
             FROM incoming
             WHERE date BETWEEN :start_date AND :end_date
             AND parent_id IS NULL
+            AND (is_fixed = 0 OR repeat_interval = 'none')
         ");
         $stmt->execute([
             'start_date' => $currentDate,
             'end_date' => $endDate
         ]);
         $result = $stmt->fetch();
-        $upcomingIncome = $result['total'] ?? 0;
+        $upcomingIncomeNonRecurring = $result['total'] ?? 0;
         
-        // Get upcoming expenses
+        // Get recurring income
+        $upcomingIncomeRecurring = 0;
+        $stmt = $pdo->prepare("
+            SELECT id, description, amount, date, repeat_interval, repeat_until
+            FROM incoming
+            WHERE is_fixed = 1 
+            AND repeat_interval != 'none'
+            AND (repeat_until IS NULL OR repeat_until >= :current_date)
+            AND parent_id IS NULL
+        ");
+        $stmt->execute(['current_date' => $currentDate]);
+        $recurringIncome = $stmt->fetchAll();
+        
+        foreach ($recurringIncome as $income) {
+            $startDate = new DateTime($income['date']);
+            $endDateObj = new DateTime($endDate);
+            $interval = $income['repeat_interval'];
+            $amount = (float)$income['amount'];
+            
+            if ($income['repeat_until']) {
+                $repeatUntil = new DateTime($income['repeat_until']);
+                if ($repeatUntil < $endDateObj) {
+                    $endDateObj = $repeatUntil;
+                }
+            }
+            
+            if ($startDate < new DateTime($currentDate)) {
+                // Advance to first occurrence on or after current date
+                while ($startDate < new DateTime($currentDate)) {
+                    switch ($interval) {
+                        case 'daily':
+                            $startDate->modify('+1 day');
+                            break;
+                        case 'weekly':
+                            $startDate->modify('+1 week');
+                            break;
+                        case 'monthly':
+                            $startDate->modify('+1 month');
+                            break;
+                        case 'quarterly':
+                            $startDate->modify('+3 months');
+                            break;
+                        case 'yearly':
+                            $startDate->modify('+1 year');
+                            break;
+                    }
+                }
+            }
+            
+            // Now add all occurrences within our range
+            while ($startDate <= $endDateObj) {
+                $upcomingIncomeRecurring += $amount;
+                
+                // Advance to next occurrence
+                switch ($interval) {
+                    case 'daily':
+                        $startDate->modify('+1 day');
+                        break;
+                    case 'weekly':
+                        $startDate->modify('+1 week');
+                        break;
+                    case 'monthly':
+                        $startDate->modify('+1 month');
+                        break;
+                    case 'quarterly':
+                        $startDate->modify('+3 months');
+                        break;
+                    case 'yearly':
+                        $startDate->modify('+1 year');
+                        break;
+                }
+            }
+        }
+        
+        // Total upcoming income
+        $upcomingIncome = $upcomingIncomeNonRecurring + $upcomingIncomeRecurring;
+        
+        // Get non-recurring upcoming expenses
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(amount), 0) as total
             FROM outgoing
             WHERE date BETWEEN :start_date AND :end_date
             AND parent_id IS NULL
+            AND (is_fixed = 0 OR repeat_interval = 'none')
         ");
         $stmt->execute([
             'start_date' => $currentDate,
             'end_date' => $endDate
         ]);
         $result = $stmt->fetch();
-        $upcomingExpenses = $result['total'] ?? 0;
+        $upcomingExpenseNonRecurring = $result['total'] ?? 0;
+        
+        // Get recurring expenses
+        $upcomingExpenseRecurring = 0;
+        $stmt = $pdo->prepare("
+            SELECT id, description, amount, date, repeat_interval, repeat_until
+            FROM outgoing
+            WHERE is_fixed = 1 
+            AND repeat_interval != 'none'
+            AND (repeat_until IS NULL OR repeat_until >= :current_date)
+            AND parent_id IS NULL
+        ");
+        $stmt->execute(['current_date' => $currentDate]);
+        $recurringExpenses = $stmt->fetchAll();
+        
+        foreach ($recurringExpenses as $expense) {
+            $startDate = new DateTime($expense['date']);
+            $endDateObj = new DateTime($endDate);
+            $interval = $expense['repeat_interval'];
+            $amount = (float)$expense['amount'];
+            
+            if ($expense['repeat_until']) {
+                $repeatUntil = new DateTime($expense['repeat_until']);
+                if ($repeatUntil < $endDateObj) {
+                    $endDateObj = $repeatUntil;
+                }
+            }
+            
+            if ($startDate < new DateTime($currentDate)) {
+                // Advance to first occurrence on or after current date
+                while ($startDate < new DateTime($currentDate)) {
+                    switch ($interval) {
+                        case 'daily':
+                            $startDate->modify('+1 day');
+                            break;
+                        case 'weekly':
+                            $startDate->modify('+1 week');
+                            break;
+                        case 'monthly':
+                            $startDate->modify('+1 month');
+                            break;
+                        case 'quarterly':
+                            $startDate->modify('+3 months');
+                            break;
+                        case 'yearly':
+                            $startDate->modify('+1 year');
+                            break;
+                    }
+                }
+            }
+            
+            // Now add all occurrences within our range
+            while ($startDate <= $endDateObj) {
+                $upcomingExpenseRecurring += $amount;
+                
+                // Advance to next occurrence
+                switch ($interval) {
+                    case 'daily':
+                        $startDate->modify('+1 day');
+                        break;
+                    case 'weekly':
+                        $startDate->modify('+1 week');
+                        break;
+                    case 'monthly':
+                        $startDate->modify('+1 month');
+                        break;
+                    case 'quarterly':
+                        $startDate->modify('+3 months');
+                        break;
+                    case 'yearly':
+                        $startDate->modify('+1 year');
+                        break;
+                }
+            }
+        }
+        
+        // Total upcoming expenses
+        $upcomingExpenses = $upcomingExpenseNonRecurring + $upcomingExpenseRecurring;
         
         // Get debt total
         $stmt = $pdo->prepare("SELECT COALESCE(SUM(remaining_amount), 0) as total FROM debt");
@@ -268,7 +424,15 @@ function getDashboardStats() {
         jsonResponse(true, 'Dashboard stats fetched successfully', [
             'currentBalance' => $currentBalance,
             'upcomingIncome' => $upcomingIncome,
+            'upcomingIncomeDetails' => [
+                'nonRecurring' => $upcomingIncomeNonRecurring,
+                'recurring' => $upcomingIncomeRecurring
+            ],
             'upcomingExpenses' => $upcomingExpenses,
+            'upcomingExpenseDetails' => [
+                'nonRecurring' => $upcomingExpenseNonRecurring,
+                'recurring' => $upcomingExpenseRecurring
+            ],
             'projectedBalance' => $projectedBalance,
             'totalDebt' => $totalDebt,
             'period' => "{$days} days"
