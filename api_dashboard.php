@@ -297,7 +297,11 @@ function getTransactionsData() {
             'current_date_inc' => $currentDate,
             'current_date_out' => $currentDate,
             'current_date_inc_2' => $currentDate,
-            'current_date_out_2' => $currentDate
+            'current_date_out_2' => $currentDate,
+            'current_date_inc_3' => $currentDate,
+            'current_date_out_3' => $currentDate,
+            'current_date_inc_4' => $currentDate,
+            'current_date_out_4' => $currentDate
         ]);
         $upcomingTransactions = $stmt->fetchAll();
 
@@ -1005,7 +1009,7 @@ function getDashboardStats() {
         
         // For recurring transactions, we only count non-split parent transactions by default
         $stmt = $pdo->prepare("
-            SELECT id, description, amount, date, repeat_interval, repeat_until, is_split
+            SELECT id, description, amount, date, repeat_interval, repeat_until
             FROM incoming 
             WHERE is_fixed = 1 
             AND repeat_interval != 'none'
@@ -1171,7 +1175,7 @@ function getDashboardStats() {
         
         // For recurring transactions, we only count non-split parent transactions by default
         $stmt = $pdo->prepare("
-            SELECT id, description, amount, date, repeat_interval, repeat_until, is_split
+            SELECT id, description, amount, date, repeat_interval, repeat_until
             FROM outgoing 
             WHERE is_fixed = 1 
             AND repeat_interval != 'none'
