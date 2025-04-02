@@ -240,6 +240,7 @@ function getTransactionsData() {
                 category_name, category_color, occurrence
             FROM recurring_transactions
             WHERE effective_date >= CURRENT_DATE
+            AND effective_date <= DATE_ADD(CURRENT_DATE, INTERVAL :days4 DAY)
             ORDER BY effective_date ASC
         ";
 
@@ -247,7 +248,8 @@ function getTransactionsData() {
         $stmt->execute([
             'days1' => $days,
             'days2' => $days,
-            'days3' => $days
+            'days3' => $days,
+            'days4' => $days
         ]);
         $upcomingTransactions = $stmt->fetchAll();
 
