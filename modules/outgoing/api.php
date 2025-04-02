@@ -819,8 +819,13 @@ function deleteTransaction() {
             }
         } else {
             // Delete main transaction and its splits
-            $stmt = $pdo->prepare("DELETE FROM outgoing WHERE id = :id OR parent_id = :parent_id");
-            $stmt->execute(['id' => $id, 'parent_id' => $id]);
+            // First delete all splits
+            $stmt = $pdo->prepare("DELETE FROM outgoing WHERE parent_id = :parent_id");
+            $stmt->execute(['parent_id' => $id]);
+            
+            // Then delete the main transaction
+            $stmt = $pdo->prepare("DELETE FROM outgoing WHERE id = :id");
+            $stmt->execute(['id' => $id]);
         }
         
         // Commit transaction
