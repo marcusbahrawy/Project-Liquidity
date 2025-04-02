@@ -29,40 +29,44 @@ $showArchive = isset($_GET['archive']) && $_GET['archive'] == 1;
 
 // Build the base query
 $sql = "
-    SELECT o.*, c.name as category_name, c.color as category_color,
-           COALESCE(
-               (SELECT MAX(date) 
-                FROM outgoing 
-                WHERE parent_id = o.id),
-               o.date
-           ) as effective_date
-    FROM outgoing o
-    LEFT JOIN categories c ON o.category_id = c.id
-    WHERE o.parent_id IS NULL
-    AND o.is_debt = :is_debt
+    WITH effective_dates AS (
+        SELECT o.*,
+               COALESCE(
+                   (SELECT MAX(date) 
+                    FROM outgoing 
+                    WHERE parent_id = o.id),
+                   o.date
+               ) as effective_date
+        FROM outgoing o
+        WHERE o.parent_id IS NULL
+    )
+    SELECT e.*, c.name as category_name, c.color as category_color
+    FROM effective_dates e
+    LEFT JOIN categories c ON e.category_id = c.id
+    WHERE e.is_debt = :is_debt
 ";
 
 $params = ['is_debt' => $is_debt];
 
 // Add search condition if search is provided
 if (!empty($search)) {
-    $sql .= " AND (o.description LIKE :search OR o.notes LIKE :search)";
+    $sql .= " AND (e.description LIKE :search OR e.notes LIKE :search)";
     $params['search'] = "%{$search}%";
 }
 
 // Add archive and recurring filters
 if ($showArchive) {
-    $sql .= " AND effective_date < :current_date AND o.is_fixed = 0";
+    $sql .= " AND e.effective_date < :current_date AND e.is_fixed = 0";
 } else {
-    $sql .= " AND effective_date >= :current_date";
+    $sql .= " AND e.effective_date >= :current_date";
     if (isset($is_recurring)) {
-        $sql .= " AND o.is_fixed = :is_recurring";
+        $sql .= " AND e.is_fixed = :is_recurring";
         $params['is_recurring'] = $is_recurring;
     }
 }
 
 // Add order by clause
-$sql .= " ORDER BY effective_date {$order}";
+$sql .= " ORDER BY e.effective_date {$order}";
 
 // Add current_date parameter
 $params['current_date'] = $currentDate;
