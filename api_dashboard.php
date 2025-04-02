@@ -120,7 +120,7 @@ function getTransactionsData() {
             LEFT JOIN categories c ON i.category_id = c.id
             WHERE i.parent_id IS NULL
             AND i.date >= CURRENT_DATE
-            AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
+            AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days_inc DAY)
             UNION ALL
             SELECT 
                 'outgoing' as type,
@@ -140,13 +140,16 @@ function getTransactionsData() {
             LEFT JOIN categories c ON o.category_id = c.id
             WHERE o.parent_id IS NULL
             AND o.date >= CURRENT_DATE
-            AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
+            AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days_out DAY)
             ORDER BY effective_date ASC
             LIMIT 10
         ";
 
         $stmt = $pdo->prepare($upcoming_transactions_sql);
-        $stmt->execute(['days' => $days]);
+        $stmt->execute([
+            'days_inc' => $days,
+            'days_out' => $days
+        ]);
         $upcomingTransactions = $stmt->fetchAll();
 
         // Debug log
