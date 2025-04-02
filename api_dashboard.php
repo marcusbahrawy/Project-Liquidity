@@ -126,6 +126,7 @@ function getTransactionsData() {
                 AND i.is_fixed = 0
                 AND i.date >= CURRENT_DATE
                 AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
+                AND (i.parent_id IS NOT NULL OR (i.parent_id IS NULL AND i.is_split = 0))
                 UNION ALL
                 SELECT 
                     'outgoing' as type,
@@ -148,49 +149,7 @@ function getTransactionsData() {
                 AND o.is_fixed = 0
                 AND o.date >= CURRENT_DATE
                 AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
-                UNION ALL
-                -- Add split transactions
-                SELECT 
-                    'incoming' as type,
-                    i.id,
-                    i.description,
-                    i.amount,
-                    i.date,
-                    i.is_split,
-                    i.is_fixed,
-                    i.category_id,
-                    i.repeat_interval,
-                    i.repeat_until,
-                    i.date as effective_date,
-                    c.name as category_name,
-                    c.color as category_color,
-                    0 as occurrence
-                FROM incoming i
-                LEFT JOIN categories c ON i.category_id = c.id
-                WHERE i.parent_id IS NOT NULL
-                AND i.date >= CURRENT_DATE
-                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
-                UNION ALL
-                SELECT 
-                    'outgoing' as type,
-                    o.id,
-                    o.description,
-                    o.amount,
-                    o.date,
-                    o.is_split,
-                    o.is_fixed,
-                    o.category_id,
-                    o.repeat_interval,
-                    o.repeat_until,
-                    o.date as effective_date,
-                    c.name as category_name,
-                    c.color as category_color,
-                    0 as occurrence
-                FROM outgoing o
-                LEFT JOIN categories c ON o.category_id = c.id
-                WHERE o.parent_id IS NOT NULL
-                AND o.date >= CURRENT_DATE
-                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
+                AND (o.parent_id IS NOT NULL OR (o.parent_id IS NULL AND o.is_split = 0))
             ),
             -- Base query for recurring transactions
             recurring_base AS (
@@ -387,31 +346,33 @@ function getTransactionsData() {
         // Get summary stats with improved handling of splits
         // Get upcoming income
         $stmt = $pdo->prepare("
-            SELECT COALESCE(SUM(amount), 0) as total 
-            FROM incoming 
+            SELECT COALESCE(SUM(amount), 0) as total
+            FROM incoming
             WHERE date BETWEEN :start_date AND :end_date
             AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
+            AND (is_fixed = 0 OR repeat_interval = 'none')
         ");
         $stmt->execute([
             'start_date' => $currentDate,
             'end_date' => $endDate
         ]);
         $result = $stmt->fetch();
-        $upcomingIncome = (float)$result['total'];
+        $upcomingIncome = $result['total'] ?? 0;
         
         // Get upcoming expenses
         $stmt = $pdo->prepare("
-            SELECT COALESCE(SUM(amount), 0) as total 
-            FROM outgoing 
+            SELECT COALESCE(SUM(amount), 0) as total
+            FROM outgoing
             WHERE date BETWEEN :start_date AND :end_date
             AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
+            AND (is_fixed = 0 OR repeat_interval = 'none')
         ");
         $stmt->execute([
             'start_date' => $currentDate,
             'end_date' => $endDate
         ]);
         $result = $stmt->fetch();
-        $upcomingExpenses = (float)$result['total'];
+        $upcomingExpenses = $result['total'] ?? 0;
         
         // Get current balance
         $initialBalance = getInitialBalance();
