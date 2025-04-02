@@ -229,10 +229,14 @@ function getTransactionsData() {
                 AND (rt.repeat_until IS NULL OR rt.effective_date < rt.repeat_until)
             )
             -- Combine all transactions
-            SELECT * FROM base_transactions
+            SELECT 
+                type, id, description, amount, effective_date as date, is_split, is_fixed,
+                category_id, repeat_interval, repeat_until, effective_date,
+                category_name, category_color, occurrence
+            FROM base_transactions
             UNION ALL
             SELECT 
-                type, id, description, amount, date, is_split, is_fixed,
+                type, id, description, amount, effective_date as date, is_split, is_fixed,
                 category_id, repeat_interval, repeat_until, effective_date,
                 category_name, category_color, occurrence
             FROM recurring_transactions
