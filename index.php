@@ -444,6 +444,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get the timeline range dropdown
     const timelineRange = document.getElementById('timelineRange');
     
+    // Automatically refresh data when dashboard loads
+    const days = document.getElementById('timelineRange').value;
+    updateDashboardData(days);
+    
     // Add clear cache button functionality
     document.getElementById('clear-cache-btn').addEventListener('click', function() {
         // Force a clean reload of data
