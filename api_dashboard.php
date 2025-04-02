@@ -88,6 +88,18 @@ function getTransactionsData() {
         // Debug log
         error_log("Date range: {$currentDate} to {$endDate}");
         
+        // Check if we have any incoming transactions
+        $checkIncomingStmt = $pdo->prepare("
+            SELECT COUNT(*) as count, 
+                   SUM(CASE WHEN date >= CURRENT_DATE THEN 1 ELSE 0 END) as future_count,
+                   SUM(CASE WHEN is_fixed = 1 THEN 1 ELSE 0 END) as fixed_count
+            FROM incoming
+            WHERE parent_id IS NULL
+        ");
+        $checkIncomingStmt->execute();
+        $incomingStats = $checkIncomingStmt->fetch();
+        error_log("Incoming transactions stats: " . json_encode($incomingStats));
+        
         // Get upcoming transactions for the dashboard
         $upcoming_transactions_sql = "
             WITH effective_dates AS (
@@ -149,6 +161,12 @@ function getTransactionsData() {
         $stmt = $pdo->prepare($upcoming_transactions_sql);
         $stmt->execute();
         $upcomingTransactions = $stmt->fetchAll();
+
+        // Debug log
+        error_log("Found " . count($upcomingTransactions) . " transactions");
+        foreach ($upcomingTransactions as $tx) {
+            error_log("Transaction: " . json_encode($tx));
+        }
 
         // Process transactions to include split items
         $organizedTransactions = [];
