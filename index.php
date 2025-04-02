@@ -111,30 +111,39 @@ $stmt->execute();
 $debtTotal = $stmt->fetch();
 $totalDebt = $debtTotal['total'] ?? 0;
 
-// Get upcoming transactions (both incoming and outgoing)
-// MODIFIED: Fetch only parent transactions first
-$stmt = $pdo->prepare("
-    (SELECT 'incoming' as type, i.id, i.description, i.amount, i.date, i.is_split, c.name as category, c.color
-     FROM incoming i
-     LEFT JOIN categories c ON i.category_id = c.id
-     WHERE i.date BETWEEN :current_date_inc AND :end_date_inc 
-     AND i.parent_id IS NULL
-     ORDER BY i.date ASC)
-    UNION ALL
-    (SELECT 'outgoing' as type, o.id, o.description, o.amount, o.date, o.is_split, c.name as category, c.color
-     FROM outgoing o
-     LEFT JOIN categories c ON o.category_id = c.id
-     WHERE o.date BETWEEN :current_date_out AND :end_date_out 
-     AND o.parent_id IS NULL
-     ORDER BY o.date ASC)
-    ORDER BY date ASC
-");
-$stmt->execute([
-    'current_date_inc' => $currentDate,
-    'end_date_inc' => $endDate,
-    'current_date_out' => $currentDate,
-    'end_date_out' => $endDate
-]);
+// Get upcoming transactions for the dashboard
+$upcoming_transactions_sql = "
+    WITH effective_dates AS (
+        SELECT 'incoming' as type, i.*,
+               COALESCE(
+                   (SELECT MAX(date) 
+                    FROM incoming 
+                    WHERE parent_id = i.id),
+                   i.date
+               ) as effective_date
+        FROM incoming i
+        WHERE i.parent_id IS NULL
+        UNION ALL
+        SELECT 'outgoing' as type, o.*,
+               COALESCE(
+                   (SELECT MAX(date) 
+                    FROM outgoing 
+                    WHERE parent_id = o.id),
+                   o.date
+               ) as effective_date
+        FROM outgoing o
+        WHERE o.parent_id IS NULL
+    )
+    SELECT e.*, c.name as category_name, c.color as category_color
+    FROM effective_dates e
+    LEFT JOIN categories c ON e.category_id = c.id
+    WHERE (e.effective_date >= CURRENT_DATE OR e.is_fixed = 1)
+    ORDER BY e.effective_date ASC
+    LIMIT 5
+";
+
+$stmt = $pdo->prepare($upcoming_transactions_sql);
+$stmt->execute();
 $upcomingTransactions = $stmt->fetchAll();
 
 // Process transactions to include split items
