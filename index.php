@@ -541,8 +541,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const days = document.getElementById('timelineRange').value;
         const cacheBuster = new Date().getTime();
         
-        // Show loading indicator
-        document.getElementById('transactions-loading').style.display = 'block';
+        // Show loading indicators
+        document.getElementById('income-loading').style.display = 'block';
+        document.getElementById('expense-loading').style.display = 'block';
         
         console.log("Forcing data refresh...");
         
@@ -561,11 +562,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Hide loading indicators
-                document.getElementById('transactions-loading').style.display = 'none';
+                document.getElementById('income-loading').style.display = 'none';
+                document.getElementById('expense-loading').style.display = 'none';
             })
             .catch(error => {
                 console.error('Error fetching transactions:', error);
-                document.getElementById('transactions-loading').style.display = 'none';
+                document.getElementById('income-loading').style.display = 'none';
+                document.getElementById('expense-loading').style.display = 'none';
             });
     });
     
@@ -586,7 +589,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('transaction-days').textContent = days;
         
         // Show loading indicators
-        document.getElementById('transactions-loading').style.display = 'block';
+        document.getElementById('income-loading').style.display = 'block';
+        document.getElementById('expense-loading').style.display = 'block';
         
         // Add a cache-busting parameter to prevent browser caching
         const cacheBuster = new Date().getTime();
@@ -616,11 +620,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Hide loading indicators
-                document.getElementById('transactions-loading').style.display = 'none';
+                document.getElementById('income-loading').style.display = 'none';
+                document.getElementById('expense-loading').style.display = 'none';
             })
             .catch(error => {
                 console.error('Error fetching transactions:', error);
-                document.getElementById('transactions-loading').style.display = 'none';
+                document.getElementById('income-loading').style.display = 'none';
+                document.getElementById('expense-loading').style.display = 'none';
             });
     }
     
