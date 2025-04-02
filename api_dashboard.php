@@ -110,6 +110,10 @@ function getTransactionsData() {
                     ) as effective_date
                 FROM incoming i
                 WHERE i.parent_id IS NULL
+                AND (
+                    i.date >= CURRENT_DATE 
+                    OR (i.is_fixed = 1 AND (i.repeat_until IS NULL OR i.repeat_until >= CURRENT_DATE))
+                )
                 UNION ALL
                 SELECT 
                     'outgoing' as type,
@@ -130,14 +134,14 @@ function getTransactionsData() {
                     ) as effective_date
                 FROM outgoing o
                 WHERE o.parent_id IS NULL
+                AND (
+                    o.date >= CURRENT_DATE 
+                    OR (o.is_fixed = 1 AND (o.repeat_until IS NULL OR o.repeat_until >= CURRENT_DATE))
+                )
             )
             SELECT e.*, c.name as category_name, c.color as category_color
             FROM effective_dates e
             LEFT JOIN categories c ON e.category_id = c.id
-            WHERE (
-                (e.effective_date >= CURRENT_DATE) OR 
-                (e.is_fixed = 1 AND (e.repeat_until IS NULL OR e.repeat_until >= CURRENT_DATE))
-            )
             ORDER BY e.effective_date ASC
             LIMIT 10
         ";
