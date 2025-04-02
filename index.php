@@ -447,18 +447,18 @@ require_once 'includes/header.php';
 }
 
 /* Modified layout for full width */
-.col-lg-12 {
-    position: relative;
-    width: 100%;
-    padding-right: 15px;
-    padding-left: 15px;
+.col-lg-6 {
+    flex: 0 0 50%;
+    max-width: 50%;
+    padding: 0 15px;
 }
 
-@media (min-width: 992px) {
-    .col-lg-12 {
-        flex: 0 0 100%;
-        max-width: 100%;
-    }
+.upcoming-expenses {
+    height: 100%;
+    background: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--card-shadow);
+    margin-bottom: 20px;
 }
 
 /* Loading indicator */
@@ -476,6 +476,8 @@ require_once 'includes/header.php';
     display: flex;
     justify-content: space-between;
     align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .small {
@@ -507,6 +509,19 @@ require_once 'includes/header.php';
     padding: 2px 8px;
     border-radius: 10px;
     margin-left: 5px;
+}
+
+/* Ensure equal height for both containers */
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0 -15px;
+}
+
+/* Make sure the expense list takes full height */
+.expense-list {
+    height: calc(100% - 60px); /* Subtract header height */
+    overflow-y: auto;
 }
 </style>
 
