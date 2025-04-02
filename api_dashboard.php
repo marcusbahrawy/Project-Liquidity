@@ -92,9 +92,7 @@ function getTransactionsData() {
         $checkIncomingStmt = $pdo->prepare("
             SELECT COUNT(*) as count, 
                    SUM(CASE WHEN date >= CURRENT_DATE THEN 1 ELSE 0 END) as future_count,
-                   SUM(CASE WHEN is_fixed = 1 THEN 1 ELSE 0 END) as fixed_count,
-                   SUM(CASE WHEN is_split = 1 THEN 1 ELSE 0 END) as split_count,
-                   SUM(CASE WHEN parent_id IS NOT NULL THEN 1 ELSE 0 END) as child_count
+                   SUM(CASE WHEN is_fixed = 1 THEN 1 ELSE 0 END) as fixed_count
             FROM incoming
             WHERE parent_id IS NULL
         ");
@@ -102,155 +100,148 @@ function getTransactionsData() {
         $incomingStats = $checkIncomingStmt->fetch();
         error_log("Incoming transactions stats: " . json_encode($incomingStats));
         
-        // Check outgoing transactions
-        $checkOutgoingStmt = $pdo->prepare("
-            SELECT COUNT(*) as count, 
-                   SUM(CASE WHEN date >= CURRENT_DATE THEN 1 ELSE 0 END) as future_count,
-                   SUM(CASE WHEN is_fixed = 1 THEN 1 ELSE 0 END) as fixed_count,
-                   SUM(CASE WHEN is_split = 1 THEN 1 ELSE 0 END) as split_count,
-                   SUM(CASE WHEN parent_id IS NOT NULL THEN 1 ELSE 0 END) as child_count
-            FROM outgoing
-            WHERE parent_id IS NULL
-        ");
-        $checkOutgoingStmt->execute();
-        $outgoingStats = $checkOutgoingStmt->fetch();
-        error_log("Outgoing transactions stats: " . json_encode($outgoingStats));
-        
         // Get upcoming transactions for the dashboard
         $upcoming_transactions_sql = "
+            WITH RECURSIVE 
+            -- Base query for non-recurring transactions
+            base_transactions AS (
+                SELECT 
+                    'incoming' as type,
+                    i.id,
+                    i.description,
+                    i.amount,
+                    i.date,
+                    i.is_split,
+                    i.is_fixed,
+                    i.category_id,
+                    i.repeat_interval,
+                    i.repeat_until,
+                    i.date as effective_date,
+                    c.name as category_name,
+                    c.color as category_color,
+                    0 as occurrence
+                FROM incoming i
+                LEFT JOIN categories c ON i.category_id = c.id
+                WHERE i.parent_id IS NULL
+                AND i.is_fixed = 0
+                AND i.date >= CURRENT_DATE
+                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days1 DAY)
+                UNION ALL
+                SELECT 
+                    'outgoing' as type,
+                    o.id,
+                    o.description,
+                    o.amount,
+                    o.date,
+                    o.is_split,
+                    o.is_fixed,
+                    o.category_id,
+                    o.repeat_interval,
+                    o.repeat_until,
+                    o.date as effective_date,
+                    c.name as category_name,
+                    c.color as category_color,
+                    0 as occurrence
+                FROM outgoing o
+                LEFT JOIN categories c ON o.category_id = c.id
+                WHERE o.parent_id IS NULL
+                AND o.is_fixed = 0
+                AND o.date >= CURRENT_DATE
+                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days2 DAY)
+            ),
+            -- Base query for recurring transactions
+            recurring_base AS (
+                SELECT 
+                    'incoming' as type,
+                    i.id,
+                    i.description,
+                    i.amount,
+                    i.date,
+                    i.is_split,
+                    i.is_fixed,
+                    i.category_id,
+                    i.repeat_interval,
+                    i.repeat_until,
+                    i.date as effective_date,
+                    c.name as category_name,
+                    c.color as category_color,
+                    0 as occurrence
+                FROM incoming i
+                LEFT JOIN categories c ON i.category_id = c.id
+                WHERE i.parent_id IS NULL
+                AND i.is_fixed = 1
+                AND i.repeat_interval != 'none'
+                AND (i.repeat_until IS NULL OR i.repeat_until >= CURRENT_DATE)
+                UNION ALL
+                SELECT 
+                    'outgoing' as type,
+                    o.id,
+                    o.description,
+                    o.amount,
+                    o.date,
+                    o.is_split,
+                    o.is_fixed,
+                    o.category_id,
+                    o.repeat_interval,
+                    o.repeat_until,
+                    o.date as effective_date,
+                    c.name as category_name,
+                    c.color as category_color,
+                    0 as occurrence
+                FROM outgoing o
+                LEFT JOIN categories c ON o.category_id = c.id
+                WHERE o.parent_id IS NULL
+                AND o.is_fixed = 1
+                AND o.repeat_interval != 'none'
+                AND (o.repeat_until IS NULL OR o.repeat_until >= CURRENT_DATE)
+            ),
+            -- Generate future occurrences
+            recurring_transactions AS (
+                -- Base case: initial transactions
+                SELECT * FROM recurring_base
+                
+                UNION ALL
+                
+                -- Recursive case: generate next occurrence
+                SELECT 
+                    rt.type,
+                    rt.id,
+                    rt.description,
+                    rt.amount,
+                    rt.date,
+                    rt.is_split,
+                    rt.is_fixed,
+                    rt.category_id,
+                    rt.repeat_interval,
+                    rt.repeat_until,
+                    CASE 
+                        WHEN rt.repeat_interval = 'daily' THEN DATE_ADD(rt.effective_date, INTERVAL 1 DAY)
+                        WHEN rt.repeat_interval = 'weekly' THEN DATE_ADD(rt.effective_date, INTERVAL 1 WEEK)
+                        WHEN rt.repeat_interval = 'monthly' THEN DATE_ADD(rt.effective_date, INTERVAL 1 MONTH)
+                        WHEN rt.repeat_interval = 'quarterly' THEN DATE_ADD(rt.effective_date, INTERVAL 3 MONTH)
+                        WHEN rt.repeat_interval = 'yearly' THEN DATE_ADD(rt.effective_date, INTERVAL 1 YEAR)
+                    END as effective_date,
+                    rt.category_name,
+                    rt.category_color,
+                    rt.occurrence + 1
+                FROM recurring_transactions rt
+                WHERE rt.effective_date < DATE_ADD(CURRENT_DATE, INTERVAL :days3 DAY)
+                AND (rt.repeat_until IS NULL OR rt.effective_date < rt.repeat_until)
+            )
+            -- Combine all transactions
             SELECT 
-                'incoming' as type,
-                i.id,
-                i.description,
-                i.amount,
-                i.date,
-                i.is_split,
-                i.is_fixed,
-                i.category_id,
-                i.repeat_interval,
-                i.repeat_until,
-                CASE 
-                    WHEN i.is_fixed = 1 AND i.repeat_interval != 'none' THEN
-                        CASE 
-                            WHEN i.repeat_interval = 'daily' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 1) + 1 DAY)
-                            WHEN i.repeat_interval = 'weekly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 7) + 1 WEEK)
-                            WHEN i.repeat_interval = 'monthly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 30) + 1 MONTH)
-                            WHEN i.repeat_interval = 'quarterly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 90) + 3 MONTH)
-                            WHEN i.repeat_interval = 'yearly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 365) + 1 YEAR)
-                            ELSE i.date
-                        END
-                    ELSE i.date
-                END as effective_date,
-                c.name as category_name,
-                c.color as category_color,
-                0 as occurrence
-            FROM incoming i
-            LEFT JOIN categories c ON i.category_id = c.id
-            WHERE i.parent_id IS NULL
-            AND i.is_fixed = 0
-            AND i.date >= CURRENT_DATE
-            AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days1 DAY)
+                type, id, description, amount, effective_date as date, is_split, is_fixed,
+                category_id, repeat_interval, repeat_until, effective_date,
+                category_name, category_color, occurrence
+            FROM base_transactions
             UNION ALL
             SELECT 
-                'outgoing' as type,
-                o.id,
-                o.description,
-                o.amount,
-                o.date,
-                o.is_split,
-                o.is_fixed,
-                o.category_id,
-                o.repeat_interval,
-                o.repeat_until,
-                CASE 
-                    WHEN o.is_fixed = 1 AND o.repeat_interval != 'none' THEN
-                        CASE 
-                            WHEN o.repeat_interval = 'daily' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 1) + 1 DAY)
-                            WHEN o.repeat_interval = 'weekly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 7) + 1 WEEK)
-                            WHEN o.repeat_interval = 'monthly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 30) + 1 MONTH)
-                            WHEN o.repeat_interval = 'quarterly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 90) + 3 MONTH)
-                            WHEN o.repeat_interval = 'yearly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 365) + 1 YEAR)
-                            ELSE o.date
-                        END
-                    ELSE o.date
-                END as effective_date,
-                c.name as category_name,
-                c.color as category_color,
-                0 as occurrence
-            FROM outgoing o
-            LEFT JOIN categories c ON o.category_id = c.id
-            WHERE o.parent_id IS NULL
-            AND o.is_fixed = 0
-            AND o.date >= CURRENT_DATE
-            AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days2 DAY)
-            UNION ALL
-            SELECT 
-                'incoming' as type,
-                i.id,
-                i.description,
-                i.amount,
-                i.date,
-                i.is_split,
-                i.is_fixed,
-                i.category_id,
-                i.repeat_interval,
-                i.repeat_until,
-                CASE 
-                    WHEN i.is_fixed = 1 AND i.repeat_interval != 'none' THEN
-                        CASE 
-                            WHEN i.repeat_interval = 'daily' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 1) + 1 DAY)
-                            WHEN i.repeat_interval = 'weekly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 7) + 1 WEEK)
-                            WHEN i.repeat_interval = 'monthly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 30) + 1 MONTH)
-                            WHEN i.repeat_interval = 'quarterly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 90) + 3 MONTH)
-                            WHEN i.repeat_interval = 'yearly' THEN DATE_ADD(i.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, i.date) / 365) + 1 YEAR)
-                            ELSE i.date
-                        END
-                    ELSE i.date
-                END as effective_date,
-                c.name as category_name,
-                c.color as category_color,
-                0 as occurrence
-            FROM incoming i
-            LEFT JOIN categories c ON i.category_id = c.id
-            WHERE i.parent_id IS NULL
-            AND i.is_fixed = 1
-            AND i.repeat_interval != 'none'
-            AND (i.repeat_until IS NULL OR i.repeat_until >= CURRENT_DATE)
-            AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days3 DAY)
-            UNION ALL
-            SELECT 
-                'outgoing' as type,
-                o.id,
-                o.description,
-                o.amount,
-                o.date,
-                o.is_split,
-                o.is_fixed,
-                o.category_id,
-                o.repeat_interval,
-                o.repeat_until,
-                CASE 
-                    WHEN o.is_fixed = 1 AND o.repeat_interval != 'none' THEN
-                        CASE 
-                            WHEN o.repeat_interval = 'daily' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 1) + 1 DAY)
-                            WHEN o.repeat_interval = 'weekly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 7) + 1 WEEK)
-                            WHEN o.repeat_interval = 'monthly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 30) + 1 MONTH)
-                            WHEN o.repeat_interval = 'quarterly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 90) + 3 MONTH)
-                            WHEN o.repeat_interval = 'yearly' THEN DATE_ADD(o.date, INTERVAL FLOOR(DATEDIFF(CURRENT_DATE, o.date) / 365) + 1 YEAR)
-                            ELSE o.date
-                        END
-                    ELSE o.date
-                END as effective_date,
-                c.name as category_name,
-                c.color as category_color,
-                0 as occurrence
-            FROM outgoing o
-            LEFT JOIN categories c ON o.category_id = c.id
-            WHERE o.parent_id IS NULL
-            AND o.is_fixed = 1
-            AND o.repeat_interval != 'none'
-            AND (o.repeat_until IS NULL OR o.repeat_until >= CURRENT_DATE)
-            AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days4 DAY)
+                type, id, description, amount, effective_date as date, is_split, is_fixed,
+                category_id, repeat_interval, repeat_until, effective_date,
+                category_name, category_color, occurrence
+            FROM recurring_transactions
+            WHERE effective_date >= CURRENT_DATE
+            AND effective_date <= DATE_ADD(CURRENT_DATE, INTERVAL :days4 DAY)
             ORDER BY effective_date ASC
         ";
 
@@ -301,15 +292,9 @@ function getTransactionsData() {
                         FROM incoming i
                         LEFT JOIN categories c ON i.category_id = c.id
                         WHERE i.parent_id = :parent_id
-                        AND i.date >= :current_date
-                        AND i.date <= DATE_ADD(:current_date, INTERVAL :days DAY)
                         ORDER BY i.amount DESC
                     ");
-                    $splitStmt->execute([
-                        'parent_id' => $transaction['id'],
-                        'current_date' => $currentDate,
-                        'days' => $days
-                    ]);
+                    $splitStmt->execute(['parent_id' => $transaction['id']]);
                     $splits = $splitStmt->fetchAll();
                 } else {
                     // Fetch outgoing split items
@@ -318,15 +303,9 @@ function getTransactionsData() {
                         FROM outgoing o
                         LEFT JOIN categories c ON o.category_id = c.id
                         WHERE o.parent_id = :parent_id
-                        AND o.date >= :current_date
-                        AND o.date <= DATE_ADD(:current_date, INTERVAL :days DAY)
                         ORDER BY o.amount DESC
                     ");
-                    $splitStmt->execute([
-                        'parent_id' => $transaction['id'],
-                        'current_date' => $currentDate,
-                        'days' => $days
-                    ]);
+                    $splitStmt->execute(['parent_id' => $transaction['id']]);
                     $splits = $splitStmt->fetchAll();
                 }
                 
@@ -357,33 +336,31 @@ function getTransactionsData() {
         // Get summary stats with improved handling of splits
         // Get upcoming income
         $stmt = $pdo->prepare("
-            SELECT COALESCE(SUM(amount), 0) as total
-            FROM incoming
+            SELECT COALESCE(SUM(amount), 0) as total 
+            FROM incoming 
             WHERE date BETWEEN :start_date AND :end_date
             AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
-            AND (is_fixed = 0 OR repeat_interval = 'none')
         ");
         $stmt->execute([
             'start_date' => $currentDate,
             'end_date' => $endDate
         ]);
         $result = $stmt->fetch();
-        $upcomingIncome = $result['total'] ?? 0;
+        $upcomingIncome = (float)$result['total'];
         
         // Get upcoming expenses
         $stmt = $pdo->prepare("
-            SELECT COALESCE(SUM(amount), 0) as total
-            FROM outgoing
+            SELECT COALESCE(SUM(amount), 0) as total 
+            FROM outgoing 
             WHERE date BETWEEN :start_date AND :end_date
             AND (parent_id IS NOT NULL OR (parent_id IS NULL AND is_split = 0))
-            AND (is_fixed = 0 OR repeat_interval = 'none')
         ");
         $stmt->execute([
             'start_date' => $currentDate,
             'end_date' => $endDate
         ]);
         $result = $stmt->fetch();
-        $upcomingExpenses = $result['total'] ?? 0;
+        $upcomingExpenses = (float)$result['total'];
         
         // Get current balance
         $initialBalance = getInitialBalance();
@@ -981,7 +958,7 @@ function getDashboardStats() {
         
         // For recurring transactions, we only count non-split parent transactions by default
         $stmt = $pdo->prepare("
-            SELECT id, description, amount, date, repeat_interval, repeat_until
+            SELECT id, description, amount, date, repeat_interval, repeat_until, is_split
             FROM incoming 
             WHERE is_fixed = 1 
             AND repeat_interval != 'none'
@@ -1147,7 +1124,7 @@ function getDashboardStats() {
         
         // For recurring transactions, we only count non-split parent transactions by default
         $stmt = $pdo->prepare("
-            SELECT id, description, amount, date, repeat_interval, repeat_until
+            SELECT id, description, amount, date, repeat_interval, repeat_until, is_split
             FROM outgoing 
             WHERE is_fixed = 1 
             AND repeat_interval != 'none'
