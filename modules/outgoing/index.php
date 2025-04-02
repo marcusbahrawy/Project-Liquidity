@@ -27,7 +27,7 @@ $total_amount = 0;
 $currentDate = date('Y-m-d');
 $showArchive = isset($_GET['archive']) && $_GET['archive'] == 1;
 
-// Modified query to handle split transactions correctly
+// Build the base query
 $sql = "
     SELECT o.*, c.name as category_name, c.color as category_color,
            COALESCE(
@@ -40,7 +40,34 @@ $sql = "
     FROM outgoing o
     LEFT JOIN categories c ON o.category_id = c.id
     WHERE o.parent_id IS NULL
-    AND (
+    AND o.is_debt = :is_debt
+";
+
+$params = ['is_debt' => $is_debt];
+
+// Add search condition if search is provided
+if (!empty($search)) {
+    $sql .= " AND (o.description LIKE :search OR o.notes LIKE :search)";
+    $params['search'] = "%{$search}%";
+}
+
+// Add archive and recurring filters
+if ($showArchive) {
+    $sql .= " AND (
+        CASE 
+            WHEN o.is_split = 1 THEN
+                COALESCE(
+                    (SELECT MAX(split_date) 
+                     FROM outgoing 
+                     WHERE parent_id = o.id 
+                     AND split_date IS NOT NULL),
+                    o.date
+                ) < :current_date
+            ELSE o.date < :current_date
+        END
+    ) AND o.is_fixed = 0";
+} else {
+    $sql .= " AND (
         CASE 
             WHEN o.is_split = 1 THEN
                 COALESCE(
@@ -52,16 +79,21 @@ $sql = "
                 ) >= :current_date
             ELSE o.date >= :current_date
         END
-    ) = :show_upcoming
-    AND o.is_fixed = 0
-    ORDER BY effective_date ASC
-";
+    )";
+    
+    if (isset($is_recurring)) {
+        $sql .= " AND o.is_fixed = :is_recurring";
+        $params['is_recurring'] = $is_recurring;
+    }
+}
+
+// Add order by clause
+$sql .= " ORDER BY effective_date {$order}";
+
+$params['current_date'] = $currentDate;
 
 $stmt = $pdo->prepare($sql);
-$stmt->execute([
-    'current_date' => $currentDate,
-    'show_upcoming' => !$showArchive
-]);
+$stmt->execute($params);
 $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Calculate total from fetched transactions
