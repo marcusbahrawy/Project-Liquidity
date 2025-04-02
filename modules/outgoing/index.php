@@ -9,13 +9,15 @@ require_once '../../config/database.php';
 // Include helper functions
 require_once '../../includes/functions.php';
 
-// Get filter parameters - keeping only search, sort, order and is_debt
+// Get filter parameters - keeping only search, sort and order
 $search = isset($_GET['search']) ? trim($_GET['search']) : null;
 $is_debt = isset($_GET['is_debt']) ? (int)$_GET['is_debt'] : 0; // Default not showing debt
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'date';
 $order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
 // Add recurring filter parameter - fixed to check if it's empty
 $is_recurring = (isset($_GET['recurring']) && $_GET['recurring'] !== '') ? (int)$_GET['recurring'] : null;
+// Add archive filter
+$show_archive = isset($_GET['archive']) && $_GET['archive'] === '1';
 
 // Initialize transactions array
 $transactions = [];
@@ -35,10 +37,15 @@ if (!empty($search)) {
     
     $params = [$is_debt, "%{$search}%", "%{$search}%"];
     
-    // Add recurring filter if set
-    if (isset($is_recurring)) {
-        $query .= " AND o.is_fixed = ?";
-        $params[] = $is_recurring;
+    // Add archive and recurring filters
+    if ($show_archive) {
+        $query .= " AND o.date < CURRENT_DATE AND o.is_fixed = 0";
+    } else {
+        $query .= " AND (o.date >= CURRENT_DATE OR o.is_fixed = 1)";
+        if (isset($is_recurring)) {
+            $query .= " AND o.is_fixed = ?";
+            $params[] = $is_recurring;
+        }
     }
     
     // Add order by clause
@@ -60,16 +67,21 @@ if (!empty($search)) {
     
     $params = [$is_debt];
     
-    // Add recurring filter if set
-    if (isset($is_recurring)) {
-        $query .= " AND o.is_fixed = ?";
-        $params[] = $is_recurring;
+    // Add archive and recurring filters
+    if ($show_archive) {
+        $query .= " AND o.date < CURRENT_DATE AND o.is_fixed = 0";
+    } else {
+        $query .= " AND (o.date >= CURRENT_DATE OR o.is_fixed = 1)";
+        if (isset($is_recurring)) {
+            $query .= " AND o.is_fixed = ?";
+            $params[] = $is_recurring;
+        }
     }
     
     // Add order by clause
     $query .= " ORDER BY o.{$sort} {$order}";
     
-    // Execute with debt parameter only
+    // Execute with parameters if needed
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);
     $transactions = $stmt->fetchAll();
@@ -113,12 +125,10 @@ require_once '../../includes/header.php';
     </div>
 </div>
 
-<!-- Simplified Filters - Only Search -->
+<!-- Filters -->
 <div class="card mb-4">
     <div class="card-body">
         <form id="filters-form" class="filters-form" method="GET">
-            <input type="hidden" name="is_debt" value="<?php echo $is_debt; ?>">
-            
             <div class="form-row">
                 <div class="form-group col-md-8">
                     <label for="search">Search</label>
@@ -128,26 +138,28 @@ require_once '../../includes/header.php';
                             <i class="fas fa-search"></i> Search
                         </button>
                         <?php if ($search): ?>
-                            <a href="?is_debt=<?php echo $is_debt; ?>" class="btn btn-light">
+                            <a href="index.php<?php echo $is_debt ? '?is_debt=1' : ''; ?>" class="btn btn-light">
                                 <i class="fas fa-times"></i> Clear
                             </a>
                         <?php endif; ?>
                     </div>
                 </div>
                 
-                <!-- Add Transaction Type Filter -->
                 <div class="form-group col-md-4">
                     <label for="recurring">Transaction Type</label>
                     <select id="recurring" name="recurring" class="form-select" onchange="this.form.submit()">
                         <option value="">All Types</option>
-                        <option value="0" <?php echo isset($is_recurring) && $is_recurring === 0 ? 'selected' : ''; ?>>Variable Cost</option>
-                        <option value="1" <?php echo isset($is_recurring) && $is_recurring === 1 ? 'selected' : ''; ?>>Fixed Cost</option>
+                        <option value="0" <?php echo isset($is_recurring) && $is_recurring === 0 ? 'selected' : ''; ?>>One-time Expense</option>
+                        <option value="1" <?php echo isset($is_recurring) && $is_recurring === 1 ? 'selected' : ''; ?>>Recurring Expense</option>
                     </select>
                 </div>
             </div>
             
             <input type="hidden" name="sort" value="<?php echo htmlspecialchars($sort); ?>">
             <input type="hidden" name="order" value="<?php echo htmlspecialchars($order); ?>">
+            <?php if ($is_debt): ?>
+                <input type="hidden" name="is_debt" value="1">
+            <?php endif; ?>
         </form>
     </div>
 </div>
@@ -155,17 +167,25 @@ require_once '../../includes/header.php';
 <!-- Transactions Table -->
 <div class="card">
     <div class="card-header">
-        <div class="card-title"><?php echo $is_debt ? 'Debt Payments' : 'Outgoing Transactions'; ?> (<?php echo count($transactions); ?>)</div>
+        <div class="card-title"><?php echo $is_debt ? 'Debt Payments' : 'Outgoing Transactions'; ?></div>
         <div class="card-actions">
+            <div class="btn-group mr-2">
+                <a href="?<?php echo http_build_query(array_merge($_GET, ['archive' => '0'])); ?>" class="btn btn-light btn-sm <?php echo !$show_archive ? 'active' : ''; ?>">
+                    <i class="fas fa-clock"></i> Upcoming
+                </a>
+                <a href="?<?php echo http_build_query(array_merge($_GET, ['archive' => '1'])); ?>" class="btn btn-light btn-sm <?php echo $show_archive ? 'active' : ''; ?>">
+                    <i class="fas fa-archive"></i> Archive
+                </a>
+            </div>
             <div class="dropdown">
-                <button class="btn btn-light btn-sm dropdown-toggle" type="button" id="exportDropdown" data-toggle="dropdown">
+                <button class="btn btn-light btn-sm dropdown-toggle" type="button" id="exportDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <i class="fas fa-download"></i> Export
                 </button>
                 <div class="dropdown-menu dropdown-menu-right" aria-labelledby="exportDropdown">
-                    <a class="dropdown-item" href="api.php?action=export&format=csv&is_debt=<?php echo $is_debt; echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&is_fixed=' . $is_recurring : ''; ?>">
+                    <a class="dropdown-item" href="api.php?action=export&format=csv<?php echo $search ? '&search=' . urlencode($search) : ''; ?><?php echo isset($is_recurring) ? '&is_fixed=' . $is_recurring : ''; ?><?php echo $is_debt ? '&is_debt=1' : ''; ?>">
                         <i class="fas fa-file-csv"></i> Export as CSV
                     </a>
-                    <a class="dropdown-item" href="api.php?action=export&format=pdf&is_debt=<?php echo $is_debt; echo $search ? '&search=' . urlencode($search) : ''; echo isset($is_recurring) ? '&is_fixed=' . $is_recurring : ''; ?>">
+                    <a class="dropdown-item" href="api.php?action=export&format=pdf<?php echo $search ? '&search=' . urlencode($search) : ''; ?><?php echo isset($is_recurring) ? '&is_fixed=' . $is_recurring : ''; ?><?php echo $is_debt ? '&is_debt=1' : ''; ?>">
                         <i class="fas fa-file-pdf"></i> Export as PDF
                     </a>
                 </div>
