@@ -52,32 +52,9 @@ if (!empty($search)) {
 
 // Add archive and recurring filters
 if ($showArchive) {
-    $sql .= " AND (
-        CASE 
-            WHEN o.is_split = 1 THEN
-                COALESCE(
-                    (SELECT MAX(date) 
-                     FROM outgoing 
-                     WHERE parent_id = o.id),
-                    o.date
-                ) < :current_date
-            ELSE o.date < :current_date
-        END
-    ) AND o.is_fixed = 0";
+    $sql .= " AND effective_date < :current_date AND o.is_fixed = 0";
 } else {
-    $sql .= " AND (
-        CASE 
-            WHEN o.is_split = 1 THEN
-                COALESCE(
-                    (SELECT MAX(date) 
-                     FROM outgoing 
-                     WHERE parent_id = o.id),
-                    o.date
-                ) >= :current_date
-            ELSE o.date >= :current_date
-        END
-    )";
-    
+    $sql .= " AND effective_date >= :current_date";
     if (isset($is_recurring)) {
         $sql .= " AND o.is_fixed = :is_recurring";
         $params['is_recurring'] = $is_recurring;
