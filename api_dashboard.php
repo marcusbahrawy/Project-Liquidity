@@ -92,13 +92,29 @@ function getTransactionsData() {
         $checkIncomingStmt = $pdo->prepare("
             SELECT COUNT(*) as count, 
                    SUM(CASE WHEN date >= CURRENT_DATE THEN 1 ELSE 0 END) as future_count,
-                   SUM(CASE WHEN is_fixed = 1 THEN 1 ELSE 0 END) as fixed_count
+                   SUM(CASE WHEN is_fixed = 1 THEN 1 ELSE 0 END) as fixed_count,
+                   SUM(CASE WHEN is_split = 1 THEN 1 ELSE 0 END) as split_count,
+                   SUM(CASE WHEN parent_id IS NOT NULL THEN 1 ELSE 0 END) as child_count
             FROM incoming
             WHERE parent_id IS NULL
         ");
         $checkIncomingStmt->execute();
         $incomingStats = $checkIncomingStmt->fetch();
         error_log("Incoming transactions stats: " . json_encode($incomingStats));
+        
+        // Check outgoing transactions
+        $checkOutgoingStmt = $pdo->prepare("
+            SELECT COUNT(*) as count, 
+                   SUM(CASE WHEN date >= CURRENT_DATE THEN 1 ELSE 0 END) as future_count,
+                   SUM(CASE WHEN is_fixed = 1 THEN 1 ELSE 0 END) as fixed_count,
+                   SUM(CASE WHEN is_split = 1 THEN 1 ELSE 0 END) as split_count,
+                   SUM(CASE WHEN parent_id IS NOT NULL THEN 1 ELSE 0 END) as child_count
+            FROM outgoing
+            WHERE parent_id IS NULL
+        ");
+        $checkOutgoingStmt->execute();
+        $outgoingStats = $checkOutgoingStmt->fetch();
+        error_log("Outgoing transactions stats: " . json_encode($outgoingStats));
         
         // Get upcoming transactions for the dashboard
         $upcoming_transactions_sql = "
