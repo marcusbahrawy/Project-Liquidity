@@ -134,8 +134,8 @@ function getTransactionsData() {
                 c.color as category_color
             FROM incoming i
             LEFT JOIN categories c ON i.category_id = c.id
-            WHERE i.date >= :current_date
-            AND i.date <= DATE_ADD(:current_date, INTERVAL :days DAY)
+            WHERE i.date >= :current_date_inc
+            AND i.date <= DATE_ADD(:current_date_inc, INTERVAL :days DAY)
             AND (
                 (i.parent_id IS NULL AND i.is_split = 0) OR
                 (i.parent_id IS NOT NULL)
@@ -158,8 +158,8 @@ function getTransactionsData() {
                 c.color as category_color
             FROM outgoing o
             LEFT JOIN categories c ON o.category_id = c.id
-            WHERE o.date >= :current_date
-            AND o.date <= DATE_ADD(:current_date, INTERVAL :days DAY)
+            WHERE o.date >= :current_date_out
+            AND o.date <= DATE_ADD(:current_date_out, INTERVAL :days DAY)
             AND (
                 (o.parent_id IS NULL AND o.is_split = 0) OR
                 (o.parent_id IS NOT NULL)
@@ -171,7 +171,8 @@ function getTransactionsData() {
         $stmt = $pdo->prepare($upcoming_transactions_sql);
         $stmt->execute([
             'days' => $days,
-            'current_date' => $currentDate
+            'current_date_inc' => $currentDate,
+            'current_date_out' => $currentDate
         ]);
         $upcomingTransactions = $stmt->fetchAll();
 
