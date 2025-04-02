@@ -146,8 +146,6 @@ function addTransaction() {
         
         // Insert splits if any
         if ($hasSplits) {
-            $totalSplitAmount = 0;
-            
             foreach ($_POST['splits'] as $split) {
                 // Skip if description or amount is empty
                 if (empty($split['description']) || empty($split['amount'])) {
@@ -159,8 +157,6 @@ function addTransaction() {
                     continue;
                 }
                 
-                $totalSplitAmount += $split['amount'];
-                
                 // Get the split date or use parent date if not provided
                 $splitDate = !empty($split['date']) ? $split['date'] : $_POST['date'];
                 
@@ -168,11 +164,11 @@ function addTransaction() {
                 $stmt = $pdo->prepare("
                     INSERT INTO outgoing (
                         description, amount, date, category_id, notes, 
-                        parent_id, is_debt, is_split, created_at
+                        parent_id, is_debt, created_at
                     )
                     VALUES (
                         :description, :amount, :date, :category_id, :notes, 
-                        :parent_id, :is_debt, 1, NOW()
+                        :parent_id, :is_debt, NOW()
                     )
                 ");
                 
@@ -185,40 +181,6 @@ function addTransaction() {
                     'parent_id' => $outgoingId,
                     'is_debt' => $is_debt ? 1 : 0
                 ]);
-            }
-            
-            // Update main transaction amount if needed
-            if ($totalSplitAmount > 0 && $totalSplitAmount != $_POST['amount']) {
-                $stmt = $pdo->prepare("
-                    UPDATE outgoing SET amount = :amount WHERE id = :id
-                ");
-                $stmt->execute([
-                    'amount' => $totalSplitAmount,
-                    'id' => $outgoingId
-                ]);
-                
-                // If it's a debt payment, update the debt_payments table
-                if ($is_debt) {
-                    $stmt = $pdo->prepare("
-                        UPDATE debt_payments SET amount = :amount WHERE outgoing_id = :outgoing_id
-                    ");
-                    $stmt->execute([
-                        'amount' => $totalSplitAmount,
-                        'outgoing_id' => $outgoingId
-                    ]);
-                    
-                    // Update debt remaining amount with the updated total
-                    $remaining = max(0, $debt['remaining_amount'] - $totalSplitAmount);
-                    $stmt = $pdo->prepare("
-                        UPDATE debt
-                        SET remaining_amount = :remaining_amount
-                        WHERE id = :id
-                    ");
-                    $stmt->execute([
-                        'remaining_amount' => $remaining,
-                        'id' => $_POST['debt_id']
-                    ]);
-                }
             }
         }
         
@@ -597,11 +559,11 @@ function updateTransaction() {
                     $stmt = $pdo->prepare("
                         INSERT INTO outgoing (
                             description, amount, date, category_id, notes, 
-                            parent_id, is_debt, is_split, created_at
+                            parent_id, is_debt, created_at
                         )
                         VALUES (
                             :description, :amount, :date, :category_id, :notes, 
-                            :parent_id, :is_debt, 1, NOW()
+                            :parent_id, :is_debt, NOW()
                         )
                     ");
                     

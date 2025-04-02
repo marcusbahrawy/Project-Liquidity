@@ -51,8 +51,7 @@ if ($is_debt) {
 
 // Get split items
 $stmt = $pdo->prepare("
-    SELECT o.*, c.name as category_name, c.color as category_color,
-           (SELECT COUNT(*) FROM outgoing WHERE parent_id = o.id) as has_children
+    SELECT o.*, c.name as category_name, c.color as category_color
     FROM outgoing o
     LEFT JOIN categories c ON o.category_id = c.id
     WHERE o.parent_id = :parent_id
@@ -60,15 +59,6 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute(['parent_id' => $id]);
 $splits = $stmt->fetchAll();
-
-// Validate split transactions
-$hasInvalidSplits = false;
-foreach ($splits as $split) {
-    if ($split['has_children'] > 0) {
-        $hasInvalidSplits = true;
-        break;
-    }
-}
 
 // Calculate totals
 $totalAmount = 0;
