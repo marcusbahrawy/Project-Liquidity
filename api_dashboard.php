@@ -148,6 +148,49 @@ function getTransactionsData() {
                 AND o.is_fixed = 0
                 AND o.date >= CURRENT_DATE
                 AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days2 DAY)
+                UNION ALL
+                -- Add split transactions
+                SELECT 
+                    'incoming' as type,
+                    i.id,
+                    i.description,
+                    i.amount,
+                    i.date,
+                    i.is_split,
+                    i.is_fixed,
+                    i.category_id,
+                    i.repeat_interval,
+                    i.repeat_until,
+                    i.date as effective_date,
+                    c.name as category_name,
+                    c.color as category_color,
+                    0 as occurrence
+                FROM incoming i
+                LEFT JOIN categories c ON i.category_id = c.id
+                WHERE i.parent_id IS NOT NULL
+                AND i.date >= CURRENT_DATE
+                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days1 DAY)
+                UNION ALL
+                SELECT 
+                    'outgoing' as type,
+                    o.id,
+                    o.description,
+                    o.amount,
+                    o.date,
+                    o.is_split,
+                    o.is_fixed,
+                    o.category_id,
+                    o.repeat_interval,
+                    o.repeat_until,
+                    o.date as effective_date,
+                    c.name as category_name,
+                    c.color as category_color,
+                    0 as occurrence
+                FROM outgoing o
+                LEFT JOIN categories c ON o.category_id = c.id
+                WHERE o.parent_id IS NOT NULL
+                AND o.date >= CURRENT_DATE
+                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days2 DAY)
             ),
             -- Base query for recurring transactions
             recurring_base AS (
