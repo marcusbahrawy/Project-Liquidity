@@ -100,6 +100,8 @@ function getTransactionsData() {
                     i.is_split,
                     i.is_fixed,
                     i.category_id,
+                    i.repeat_interval,
+                    i.repeat_until,
                     COALESCE(
                         (SELECT MAX(date) 
                          FROM incoming 
@@ -118,6 +120,8 @@ function getTransactionsData() {
                     o.is_split,
                     o.is_fixed,
                     o.category_id,
+                    o.repeat_interval,
+                    o.repeat_until,
                     COALESCE(
                         (SELECT MAX(date) 
                          FROM outgoing 
@@ -130,9 +134,12 @@ function getTransactionsData() {
             SELECT e.*, c.name as category_name, c.color as category_color
             FROM effective_dates e
             LEFT JOIN categories c ON e.category_id = c.id
-            WHERE (e.effective_date >= CURRENT_DATE OR e.is_fixed = 1)
+            WHERE (
+                (e.effective_date >= CURRENT_DATE) OR 
+                (e.is_fixed = 1 AND (e.repeat_until IS NULL OR e.repeat_until >= CURRENT_DATE))
+            )
             ORDER BY e.effective_date ASC
-            LIMIT 5
+            LIMIT 10
         ";
 
         $stmt = $pdo->prepare($upcoming_transactions_sql);
