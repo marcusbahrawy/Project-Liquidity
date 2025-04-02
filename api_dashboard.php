@@ -102,45 +102,46 @@ function getTransactionsData() {
         
         // Get upcoming transactions for the dashboard
         $upcoming_transactions_sql = "
-            WITH effective_dates AS (
-                SELECT 
-                    'incoming' as type,
-                    i.id,
-                    i.description,
-                    i.amount,
-                    i.date,
-                    i.is_split,
-                    i.is_fixed,
-                    i.category_id,
-                    i.repeat_interval,
-                    i.repeat_until,
-                    i.date as effective_date
-                FROM incoming i
-                WHERE i.parent_id IS NULL
-                AND i.date >= CURRENT_DATE
-                AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
-                UNION ALL
-                SELECT 
-                    'outgoing' as type,
-                    o.id,
-                    o.description,
-                    o.amount,
-                    o.date,
-                    o.is_split,
-                    o.is_fixed,
-                    o.category_id,
-                    o.repeat_interval,
-                    o.repeat_until,
-                    o.date as effective_date
-                FROM outgoing o
-                WHERE o.parent_id IS NULL
-                AND o.date >= CURRENT_DATE
-                AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
-            )
-            SELECT e.*, c.name as category_name, c.color as category_color
-            FROM effective_dates e
-            LEFT JOIN categories c ON e.category_id = c.id
-            ORDER BY e.effective_date ASC
+            SELECT 
+                'incoming' as type,
+                i.id,
+                i.description,
+                i.amount,
+                i.date,
+                i.is_split,
+                i.is_fixed,
+                i.category_id,
+                i.repeat_interval,
+                i.repeat_until,
+                i.date as effective_date,
+                c.name as category_name,
+                c.color as category_color
+            FROM incoming i
+            LEFT JOIN categories c ON i.category_id = c.id
+            WHERE i.parent_id IS NULL
+            AND i.date >= CURRENT_DATE
+            AND i.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
+            UNION ALL
+            SELECT 
+                'outgoing' as type,
+                o.id,
+                o.description,
+                o.amount,
+                o.date,
+                o.is_split,
+                o.is_fixed,
+                o.category_id,
+                o.repeat_interval,
+                o.repeat_until,
+                o.date as effective_date,
+                c.name as category_name,
+                c.color as category_color
+            FROM outgoing o
+            LEFT JOIN categories c ON o.category_id = c.id
+            WHERE o.parent_id IS NULL
+            AND o.date >= CURRENT_DATE
+            AND o.date <= DATE_ADD(CURRENT_DATE, INTERVAL :days DAY)
+            ORDER BY effective_date ASC
             LIMIT 10
         ";
 
