@@ -56,15 +56,27 @@ function getTimelineData() {
         $incomeData = [];
         $expenseData = [];
         
-        // Get current balance (sum of all income minus all expenses up to today)
+        // Get current balance
         $stmt = $pdo->prepare("
             SELECT 
-                (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date AND parent_id IS NULL) -
-                (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date AND parent_id IS NULL) as balance
+                (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date) -
+                (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date) as transaction_sum
         ");
         $stmt->execute(['current_date' => $currentDate]);
         $result = $stmt->fetch();
-        $currentBalance = $result['balance'] ?? 0;
+        $transactionSum = $result['transaction_sum'] ?? 0;
+        
+        // Get initial balance
+        $stmt = $pdo->prepare("
+            SELECT setting_value FROM settings 
+            WHERE setting_key = 'initial_balance'
+        ");
+        $stmt->execute();
+        $result = $stmt->fetch();
+        $initialBalance = $result ? (float)$result['setting_value'] : 0;
+        
+        // Current balance is initial balance + all transactions
+        $currentBalance = $initialBalance + $transactionSum;
         
         // Generate dates for the next X days
         $dateRange = [];
@@ -220,19 +232,30 @@ function getDashboardStats() {
         // Get current balance
         $stmt = $pdo->prepare("
             SELECT 
-                (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date AND parent_id IS NULL) -
-                (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date AND parent_id IS NULL) as balance
+                (SELECT COALESCE(SUM(amount), 0) FROM incoming WHERE date <= :current_date) -
+                (SELECT COALESCE(SUM(amount), 0) FROM outgoing WHERE date <= :current_date) as transaction_sum
         ");
         $stmt->execute(['current_date' => $currentDate]);
         $result = $stmt->fetch();
-        $currentBalance = $result['balance'] ?? 0;
+        $transactionSum = $result['transaction_sum'] ?? 0;
+        
+        // Get initial balance
+        $stmt = $pdo->prepare("
+            SELECT setting_value FROM settings 
+            WHERE setting_key = 'initial_balance'
+        ");
+        $stmt->execute();
+        $result = $stmt->fetch();
+        $initialBalance = $result ? (float)$result['setting_value'] : 0;
+        
+        // Current balance is initial balance + all transactions
+        $currentBalance = $initialBalance + $transactionSum;
         
         // Get non-recurring upcoming income
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(amount), 0) as total
             FROM incoming
             WHERE date BETWEEN :start_date AND :end_date
-            AND parent_id IS NULL
             AND (is_fixed = 0 OR repeat_interval = 'none')
         ");
         $stmt->execute([
@@ -250,7 +273,6 @@ function getDashboardStats() {
             WHERE is_fixed = 1 
             AND repeat_interval != 'none'
             AND (repeat_until IS NULL OR repeat_until >= :current_date)
-            AND parent_id IS NULL
         ");
         $stmt->execute(['current_date' => $currentDate]);
         $recurringIncome = $stmt->fetchAll();
@@ -324,7 +346,6 @@ function getDashboardStats() {
             SELECT COALESCE(SUM(amount), 0) as total
             FROM outgoing
             WHERE date BETWEEN :start_date AND :end_date
-            AND parent_id IS NULL
             AND (is_fixed = 0 OR repeat_interval = 'none')
         ");
         $stmt->execute([
@@ -342,7 +363,6 @@ function getDashboardStats() {
             WHERE is_fixed = 1 
             AND repeat_interval != 'none'
             AND (repeat_until IS NULL OR repeat_until >= :current_date)
-            AND parent_id IS NULL
         ");
         $stmt->execute(['current_date' => $currentDate]);
         $recurringExpenses = $stmt->fetchAll();
